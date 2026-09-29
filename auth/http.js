@@ -125,11 +125,10 @@ export async function handleAuthRequest(request, response, context) {
           now: context.now,
           previousSessionId: readCookie(headerValue(request.headers, "cookie"), SESSION_COOKIE),
         });
-        response.statusCode = 200;
-        response.setHeader("Content-Type", "text/plain; charset=utf-8");
-        response.setHeader("Refresh", "0; url=/investigators");
+        response.statusCode = 302;
+        response.setHeader("Location", "/investigators");
         response.setHeader("Set-Cookie", result.cookies);
-        response.end("已登录");
+        response.end("");
       } catch (error) {
         sendError(response, error, log, [clearCookie(OAUTH_STATE_COOKIE)]);
       }

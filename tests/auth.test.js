@@ -230,8 +230,9 @@ test("oauth url, state, role gate, cookie, and hashed session", async () => {
         fetchImpl: discord.fetchImpl,
         logs,
       });
-      assert.equal(callback.statusCode, 200);
-      assert.equal(callback.body, "已登录");
+      assert.equal(callback.statusCode, 302);
+      assert.equal(callback.headers.get("location"), "/investigators");
+      assert.equal(callback.body, "");
       assert.deepEqual(discord.calls.map((call) => call.url), [
         `${DISCORD_API_BASE}/oauth2/token`,
         `${DISCORD_API_BASE}/users/@me`,
