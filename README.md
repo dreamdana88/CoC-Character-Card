@@ -1,6 +1,6 @@
 # CoC-Character-Card
 
-CoC 7 角色卡中心。当前做到 Phase B3：Discord 登录和贵宾门禁。没有车卡页面。
+CoC 7 角色卡中心。当前做到 Phase B4：登录后可以新建、编辑、复制和删除自己的调查员。没有 Internal API，也不连接 TeaParty-Bell。
 
 ## 规则
 
@@ -37,3 +37,5 @@ npm test
 ```
 
 玩家身份用 PL。SQLite 使用 `better-sqlite3`，不用 `node:sqlite`。库文件只由本服务打开，路径来自 `DATABASE_PATH`。启动时做完整性检查，损坏则拒绝打开。在线备份每天一份，保留最近 14 份。登录使用 Discord Authorization Code，scope 为 `identify` 和 `guilds.members.read`，不保存 access token 和 refresh token。
+
+`node server.js` 监听 `127.0.0.1`，端口读 `PORT`，默认 `8787`。角色卡接口是 `/api/characters`。主人只认当前会话，不接受页面传入的 owner。

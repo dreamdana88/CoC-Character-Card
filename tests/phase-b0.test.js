@@ -5,7 +5,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const emptyDirs = ["web", "api"];
 const envKeys = [
   "DISCORD_CLIENT_ID",
   "DISCORD_CLIENT_SECRET",
@@ -30,7 +29,7 @@ function atLeast(version, minimum) {
   return true;
 }
 
-test("Phase B0 skeleton stays runnable and web and api are still empty", () => {
+test("Phase B0 skeleton stays runnable", () => {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.equal(pkg.name, "coc-character-card");
   assert.equal(pkg.private, true);
@@ -40,12 +39,12 @@ test("Phase B0 skeleton stays runnable and web and api are still empty", () => {
   assert.equal(pkg.devDependencies, undefined);
   assert.equal(atLeast(process.version, "22.20.0"), true);
 
-  for (const dir of [...emptyDirs, "tests"]) {
+  for (const dir of ["web", "api", "tests"]) {
     assert.equal(statSync(join(root, dir)).isDirectory(), true, dir);
   }
-  for (const dir of emptyDirs) {
-    assert.deepEqual(readdirSync(join(root, dir)), [".gitkeep"]);
-  }
+  assert.deepEqual(readdirSync(join(root, "web")).sort(), ["pages.js", "site.css"]);
+  assert.deepEqual(readdirSync(join(root, "api")).sort(), ["characters.js"]);
+  assert.equal(statSync(join(root, "server.js")).isFile(), true);
   assert.deepEqual(readdirSync(join(root, "storage")).sort(), [
     "backup.js",
     "characters.js",
@@ -109,8 +108,8 @@ test("Phase B0 skeleton stays runnable and web and api are still empty", () => {
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
-  assert.match(readme, /Phase B3/);
+  assert.match(readme, /Phase B4/);
   assert.match(readme, /better-sqlite3/);
   assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
-  assert.match(agents, /B0、B1、B2、B3 已完成/);
+  assert.match(agents, /B0、B1、B2、B3、B4 已完成/);
 });

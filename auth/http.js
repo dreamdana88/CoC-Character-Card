@@ -127,6 +127,7 @@ export async function handleAuthRequest(request, response, context) {
         });
         response.statusCode = 200;
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
+        response.setHeader("Refresh", "0; url=/investigators");
         response.setHeader("Set-Cookie", result.cookies);
         response.end("已登录");
       } catch (error) {
