@@ -1,0 +1,14 @@
+{
+  "name": "coc-character-card",
+  "version": "0.0.0",
+  "description": "CoC 7 角色卡中心。Phase B0 只有项目骨架。",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/phase-b0.test.js && node -e \"console.log('PASS')\""
+  },
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "license": "UNLICENSED"
+}
