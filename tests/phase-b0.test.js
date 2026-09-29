@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const emptyDirs = ["web", "api", "auth", "storage", "rules"];
+const emptyDirs = ["web", "api", "auth", "storage"];
 const envKeys = [
   "DISCORD_CLIENT_ID",
   "DISCORD_CLIENT_SECRET",
@@ -35,7 +35,7 @@ test("Phase B0 skeleton is runnable and later phases are not started", () => {
   assert.equal(pkg.name, "coc-character-card");
   assert.equal(pkg.private, true);
   assert.equal(pkg.engines.node, ">=22.20.0");
-  assert.equal(pkg.scripts.test.includes("tests/phase-b0.test.js"), true);
+  assert.match(pkg.scripts.test, /node --test /);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
   assert.equal(atLeast(process.version, "22.20.0"), true);
@@ -45,6 +45,14 @@ test("Phase B0 skeleton is runnable and later phases are not started", () => {
   }
   for (const dir of emptyDirs) {
     assert.deepEqual(readdirSync(join(root, dir)), [".gitkeep"]);
+  }
+  const ruleFiles = readdirSync(join(root, "rules")).filter((name) => name !== ".gitkeep").sort();
+  assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "validation.js"]);
+  for (const file of ruleFiles) {
+    const source = readFileSync(join(root, "rules", file), "utf8");
+    assert.equal(source.includes("better-sqlite3"), false, file);
+    assert.equal(source.includes("discord"), false, file);
+    assert.equal(source.includes("../TeaParty-Bell"), false, file);
   }
 
   const gitignore = readFileSync(join(root, ".gitignore"), "utf8");
