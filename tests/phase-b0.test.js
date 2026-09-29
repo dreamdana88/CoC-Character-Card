@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const emptyDirs = ["web", "api", "auth"];
+const emptyDirs = ["web", "api"];
 const envKeys = [
   "DISCORD_CLIENT_ID",
   "DISCORD_CLIENT_SECRET",
@@ -30,7 +30,7 @@ function atLeast(version, minimum) {
   return true;
 }
 
-test("Phase B0 skeleton stays runnable and web, api, and auth are still empty", () => {
+test("Phase B0 skeleton stays runnable and web and api are still empty", () => {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.equal(pkg.name, "coc-character-card");
   assert.equal(pkg.private, true);
@@ -54,7 +54,16 @@ test("Phase B0 skeleton stays runnable and web, api, and auth are still empty", 
     "index.js",
     "migrations",
   ]);
-  assert.deepEqual(readdirSync(join(root, "storage", "migrations")), ["001_init.sql"]);
+  assert.deepEqual(readdirSync(join(root, "storage", "migrations")).sort(), ["001_init.sql", "002_auth.sql"]);
+  assert.deepEqual(readdirSync(join(root, "auth")).sort(), [
+    "config.js",
+    "constants.js",
+    "discord.js",
+    "errors.js",
+    "http.js",
+    "index.js",
+    "store.js",
+  ]);
   const ruleFiles = readdirSync(join(root, "rules")).filter((name) => name !== ".gitkeep").sort();
   assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "validation.js"]);
   for (const file of ruleFiles) {
@@ -100,8 +109,8 @@ test("Phase B0 skeleton stays runnable and web, api, and auth are still empty", 
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
-  assert.match(readme, /Phase B2/);
+  assert.match(readme, /Phase B3/);
   assert.match(readme, /better-sqlite3/);
   assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
-  assert.match(agents, /B0、B1、B2 已完成/);
+  assert.match(agents, /B0、B1、B2、B3 已完成/);
 });

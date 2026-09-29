@@ -1,7 +1,7 @@
 {
   "name": "coc-character-card",
   "version": "0.0.0",
-  "description": "CoC 7 角色卡中心。Phase B2：SQLite 角色库。",
+  "description": "CoC 7 角色卡中心。Phase B3：Discord 登录与贵宾门禁。",
   "private": true,
   "type": "module",
   "scripts": {
