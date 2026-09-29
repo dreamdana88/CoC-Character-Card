@@ -2,7 +2,7 @@
 
 本仓库是 CoC 7 角色卡中心，独立于 TeaParty-Bell。
 
-优先级：用户当前指令 → 本文件 → `../TeaParty-Bell/docs/coc-b-line.md` 与两份审计 → 现有代码。冲突或不确定时停下，问用户。施工文档若仍写「用 Bot 查成员」或「静默复查」，以本文件为准。
+优先级：用户当前指令 → 本文件 → `docs/reference/` 里的两份审计 → 现有代码。冲突或不确定时停下，问用户。与本文件冲突时，以本文件为准。
 
 ## 铁律
 
@@ -36,14 +36,14 @@ B7 内部 API 是唯一集成边界，只监听本机或校验 `INTERNAL_API_SEC
 
 Discord 接口查当前官方文档。登录用 Authorization Code Flow，scope 为 `identify` + `guilds.members.read`。用当前用户自己的 Access Token 读 `/users/@me`，以及 `/users/@me/guilds/{guild.id}/member` 的 `roles`。这是 OAuth scope，不是 Guild Members Gateway Intent，也不使用小G宝的 Bot Token。
 
-角色卡公式只认：
+角色卡公式只认本仓库里的：
 
 ```text
-../TeaParty-Bell/docs/tl-coc-card-xlsx-audit.md
-../TeaParty-Bell/docs/coc-phase0-audit.md
+docs/reference/tl-coc-card-xlsx-audit.md
+docs/reference/coc-phase0-audit.md
 ```
 
-`../TL COC CARD.xlsx` 只是参考。审计没写的公式，停下来问。禁止 `eval`，禁止解析 Excel 公式字符串。
+审计没写的公式，停下来问。禁止 `eval`，禁止解析 Excel 公式字符串。
 
 ## 产品决定
 

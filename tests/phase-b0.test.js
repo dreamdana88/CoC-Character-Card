@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -66,10 +66,21 @@ test("Phase B0 skeleton is runnable and later phases are not started", () => {
   assert.equal(example.includes("1447978053665030280"), false);
 
   const readme = readFileSync(join(root, "README.md"), "utf8");
-  assert.match(readme, /tl-coc-card-xlsx-audit\.md/);
-  assert.match(readme, /coc-phase0-audit\.md/);
-  assert.match(readme, /TL COC CARD\.xlsx/);
-  assert.equal(existsSync(join(root, "../TeaParty-Bell/docs/tl-coc-card-xlsx-audit.md")), true);
-  assert.equal(existsSync(join(root, "../TeaParty-Bell/docs/coc-phase0-audit.md")), true);
-  assert.equal(existsSync(join(root, "../TL COC CARD.xlsx")), true);
+  const agents = readFileSync(join(root, "AGENTS.md"), "utf8");
+  const references = [
+    "docs/reference/tl-coc-card-xlsx-audit.md",
+    "docs/reference/coc-phase0-audit.md",
+  ];
+  for (const reference of references) {
+    assert.match(readme, new RegExp(reference.replaceAll(".", "\\.")));
+    assert.match(agents, new RegExp(reference.replaceAll(".", "\\.")));
+    const text = readFileSync(join(root, reference), "utf8");
+    assert.equal(text.length > 1000, true, reference);
+  }
+  assert.match(readFileSync(join(root, references[0]), "utf8"), /^# TL COC CARD\.xlsx 拆解报告/);
+  assert.match(readFileSync(join(root, references[1]), "utf8"), /^# TeaParty-Bell CoC Phase 0 审计报告/);
+  for (const file of [readme, agents]) {
+    assert.equal(file.includes("../TeaParty-Bell"), false);
+    assert.equal(file.includes("../TL COC CARD.xlsx"), false);
+  }
 });
