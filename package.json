@@ -1,7 +1,7 @@
 {
   "name": "coc-character-card",
   "version": "0.0.0",
-  "description": "CoC 7 角色卡中心。Phase B1：角色卡格式、校验和规则计算。",
+  "description": "CoC 7 角色卡中心。Phase B2：SQLite 角色库。",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,5 +10,8 @@
   "engines": {
     "node": ">=22.20.0"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
+  }
 }

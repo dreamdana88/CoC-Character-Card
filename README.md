@@ -1,6 +1,6 @@
 # CoC-Character-Card
 
-CoC 7 角色卡中心。当前做到 Phase B1：角色卡格式、校验和规则计算。没有登录、数据库和车卡页面。
+CoC 7 角色卡中心。当前做到 Phase B2：角色卡存在 SQLite。没有登录和车卡页面。
 
 ## 规则
 
@@ -36,4 +36,4 @@ INTERNAL_API_SECRET
 npm test
 ```
 
-玩家身份用 PL。以后的 SQLite 使用 `better-sqlite3`，不用 `node:sqlite`。本阶段不安装数据库驱动。
+玩家身份用 PL。SQLite 使用 `better-sqlite3`，不用 `node:sqlite`。库文件只由本服务打开，路径来自 `DATABASE_PATH`。启动时做完整性检查，损坏则拒绝打开。在线备份每天一份，保留最近 14 份。

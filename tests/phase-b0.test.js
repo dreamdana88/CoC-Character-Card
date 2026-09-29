@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const emptyDirs = ["web", "api", "auth", "storage"];
+const emptyDirs = ["web", "api", "auth"];
 const envKeys = [
   "DISCORD_CLIENT_ID",
   "DISCORD_CLIENT_SECRET",
@@ -30,13 +30,13 @@ function atLeast(version, minimum) {
   return true;
 }
 
-test("Phase B0 skeleton is runnable and later phases are not started", () => {
+test("Phase B0 skeleton stays runnable and web, api, and auth are still empty", () => {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.equal(pkg.name, "coc-character-card");
   assert.equal(pkg.private, true);
   assert.equal(pkg.engines.node, ">=22.20.0");
   assert.match(pkg.scripts.test, /node --test /);
-  assert.equal(pkg.dependencies, undefined);
+  assert.deepEqual(pkg.dependencies, { "better-sqlite3": "^13.0.3" });
   assert.equal(pkg.devDependencies, undefined);
   assert.equal(atLeast(process.version, "22.20.0"), true);
 
@@ -46,6 +46,15 @@ test("Phase B0 skeleton is runnable and later phases are not started", () => {
   for (const dir of emptyDirs) {
     assert.deepEqual(readdirSync(join(root, dir)), [".gitkeep"]);
   }
+  assert.deepEqual(readdirSync(join(root, "storage")).sort(), [
+    "backup.js",
+    "characters.js",
+    "database.js",
+    "errors.js",
+    "index.js",
+    "migrations",
+  ]);
+  assert.deepEqual(readdirSync(join(root, "storage", "migrations")), ["001_init.sql"]);
   const ruleFiles = readdirSync(join(root, "rules")).filter((name) => name !== ".gitkeep").sort();
   assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "validation.js"]);
   for (const file of ruleFiles) {
@@ -91,4 +100,8 @@ test("Phase B0 skeleton is runnable and later phases are not started", () => {
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
+  assert.match(readme, /Phase B2/);
+  assert.match(readme, /better-sqlite3/);
+  assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
+  assert.match(agents, /B0、B1、B2 已完成/);
 });
