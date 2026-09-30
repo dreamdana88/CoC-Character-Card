@@ -194,6 +194,7 @@ test("characters can be created, read, updated, listed, duplicated, and deleted"
     deleteCharacter(db, copy.character.id, "100");
     assert.throws(() => getCharacter(db, copy.character.id), (error) => expectStorageError(error, "NOT_FOUND"));
     assert.equal(getCharacter(db, second.id).character.identity.name, "别人的卡");
+    assert.equal(Object.hasOwn(getCharacter(db, second.id).character.identity, "playerName"), false);
   } finally {
     db.close();
     removeTemp(dir);

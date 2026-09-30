@@ -8,9 +8,11 @@ import { RuleError } from "../rules/coc7.js";
 import {
   BACKGROUND_FIELDS,
   CHARACTERISTIC_FIELDS,
+  FORBIDDEN_CARD_FIELDS,
   IDENTITY_FIELDS,
   RULESET,
   SCHEMA_VERSION,
+  readBackground,
 } from "../rules/characterSchema.js";
 import { derivePreview, pointBuyUsage, rollCharacteristicSets, skillBaseErrors } from "../rules/sheet.js";
 import { validateCharacter } from "../rules/validation.js";
@@ -191,7 +193,7 @@ function assembleCard(body, { id, ownerId, existing }) {
     characteristics: copyKnown(source.characteristics, CHARACTERISTIC_FIELDS),
     occupation: sectionValue(source, "occupation", existing, emptyOccupation(), readOccupation),
     skills: sectionValue(source, "skills", existing, [], readSkills),
-    background: sectionValue(source, "background", existing, emptyBackground(), (value) => copyKnown(value, BACKGROUND_FIELDS)),
+    background: readBackground(sectionValue(source, "background", existing, emptyBackground(), (value) => value)),
     weapons: sectionValue(source, "weapons", existing, [], (value) => readWeapons(value, errors)),
     armor: sectionValue(source, "armor", existing, null, readArmor),
     possessions: sectionValue(source, "possessions", existing, { items: [] }, (value) => readPossessions(value, errors)),
@@ -279,7 +281,7 @@ function present(record) {
     characteristics: copyKnown(card.characteristics, CHARACTERISTIC_FIELDS),
     occupation: readOccupation(card.occupation),
     skills: Array.isArray(card.skills) ? card.skills.map(presentSkill) : [],
-    background: copyKnown(card.background, BACKGROUND_FIELDS),
+    background: readBackground(card.background),
     weapons: Array.isArray(card.weapons) ? card.weapons.map(presentWeapon) : [],
     armor: presentArmor(card.armor),
     possessions: presentPossessions(card.possessions),
@@ -383,12 +385,95 @@ function sendStorageError(response, error) {
   sendJson(response, 500, { ok: false, error: error.code || "UNKNOWN", message: "角色卡保存失败" });
 }
 
+const IMPORT_SECTIONS = Object.freeze([
+  "schemaVersion",
+  "ruleset",
+  "identity",
+  "characteristics",
+  "occupation",
+  "skills",
+  "background",
+  "weapons",
+  "possessions",
+  "spells",
+]);
+
+function collectForbidden(value, path, errors) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectForbidden(item, `${path}[${index}]`, errors));
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    const here = path ? `${path}.${key}` : key;
+    if (FORBIDDEN_CARD_FIELDS.includes(key)) {
+      errors.push({ path: here, message: "长期卡不保存本局状态或 Excel 坐标" });
+    }
+    collectForbidden(value[key], here, errors);
+  }
+}
+
+// 导入文件必须自带完整栏目。缺栏目时不拿空职业或空技能补成一张能保存的卡。
+function importShapeErrors(body) {
+  const errors = [];
+  for (const key of IMPORT_SECTIONS) {
+    if (!Object.hasOwn(body, key)) errors.push({ path: key, message: `导入文件缺少 ${key}` });
+  }
+  if (Object.hasOwn(body, "schemaVersion") && body.schemaVersion !== SCHEMA_VERSION) {
+    errors.push({ path: "schemaVersion", message: "schemaVersion 必须是 1" });
+  }
+  if (Object.hasOwn(body, "ruleset") && body.ruleset !== RULESET) {
+    errors.push({ path: "ruleset", message: 'ruleset 必须是 "coc7"' });
+  }
+  collectForbidden(body, "", errors);
+  return errors;
+}
+
+function exportedCharacter(character) {
+  const card = withoutStoredPlayerName(character);
+  if (!card || typeof card !== "object") return card;
+  return { ...card, background: readBackground(card.background) };
+}
+
+function withoutStoredPlayerName(character) {
+  if (!character?.identity || typeof character.identity !== "object" || Array.isArray(character.identity) || !Object.hasOwn(character.identity, "playerName")) {
+    return character;
+  }
+  const identity = { ...character.identity };
+  delete identity.playerName;
+  return { ...character, identity };
+}
+
+function exportBaseName(name) {
+  const text = typeof name === "string" ? name : "";
+  let cleaned = "";
+  for (const char of text) {
+    const code = char.codePointAt(0);
+    if (code <= 31 || code === 127) continue;
+    if ("<>:\"/\\|?*;".includes(char)) continue;
+    cleaned += char;
+  }
+  cleaned = cleaned.trim().slice(0, 60);
+  if (cleaned === "" || /^\.+$/.test(cleaned)) return "investigator";
+  return cleaned;
+}
+
+function contentDisposition(name) {
+  const base = exportBaseName(name);
+  const ascii = /^[\x20-\x7e]+$/.test(base) ? base : "investigator";
+  const star = encodeURIComponent(`${base}.coc7.json`);
+  return `attachment; filename="${ascii}.coc7.json"; filename*=UTF-8''${star}`;
+}
+
 function routeOf(pathname) {
   if (pathname === "/api/characters") return { name: "collection" };
   if (pathname === "/api/characters/preview") return { name: "preview" };
+  if (pathname === "/api/characters/import") return { name: "import" };
   if (pathname === "/api/characteristics/rolls") return { name: "rolls" };
   const duplicated = pathname.match(/^\/api\/characters\/([^/]+)\/duplicate$/);
   if (duplicated) return { name: "duplicate", id: decodeURIComponent(duplicated[1]) };
+  const exported = pathname.match(/^\/api\/characters\/([^/]+)\/export$/);
+  if (exported) return { name: "export", id: decodeURIComponent(exported[1]) };
   const one = pathname.match(/^\/api\/characters\/([^/]+)$/);
   if (one) return { name: "one", id: decodeURIComponent(one[1]) };
   return null;
@@ -419,6 +504,8 @@ export async function handleCharacterApi(request, response, context) {
     rolls: ["POST"],
     one: ["GET", "PATCH", "DELETE"],
     duplicate: ["POST"],
+    import: ["POST"],
+    export: ["GET"],
   };
   if (!allowed[route.name].includes(request.method)) {
     response.setHeader("Allow", allowed[route.name].join(", "));
@@ -481,6 +568,40 @@ export async function handleCharacterApi(request, response, context) {
         }
         throw error;
       }
+      return;
+    }
+
+    if (route.name === "export" && request.method === "GET") {
+      const record = getCharacter(context.db, route.id);
+      if (!ownedOrReject(response, record, user.userDiscordId)) return;
+      response.setHeader("Content-Disposition", contentDisposition(record.character?.identity?.name));
+      sendJson(response, 200, exportedCharacter(record.character));
+      return;
+    }
+
+    if (route.name === "import" && request.method === "POST") {
+      const payload = await readPayload(request);
+      if (payload.error) {
+        sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: payload.error });
+        return;
+      }
+      const shapeErrors = importShapeErrors(payload.value);
+      if (shapeErrors.length > 0) {
+        validationResponse(response, shapeErrors);
+        return;
+      }
+      const assembled = assembleCard(payload.value, {
+        id: randomUUID(),
+        ownerId: user.userDiscordId,
+        existing: null,
+      });
+      const validated = validateCharacter(assembled.card);
+      const errors = mergedErrors(assembled, validated);
+      if (errors.length > 0) {
+        validationResponse(response, errors);
+        return;
+      }
+      sendJson(response, 201, present(createCharacter(context.db, assembled.card, { now: context.now })));
       return;
     }
 

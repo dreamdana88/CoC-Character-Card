@@ -106,7 +106,6 @@ function validBody(name = "奈洛莉") {
     skills: [{ name: "会计", base: 5, growth: 0, occupationPoints: 1, interestPoints: 0 }],
     identity: {
       name,
-      playerName: "玩家甲",
       age: 28,
       sex: "女",
       era: "1920s",
@@ -155,6 +154,8 @@ test("guests cannot open character pages or the character API", async () => {
       ["PATCH", "/api/characters/card-1"],
       ["DELETE", "/api/characters/card-1"],
       ["POST", "/api/characters/card-1/duplicate"],
+      ["GET", "/api/characters/card-1/export"],
+      ["POST", "/api/characters/import"],
     ];
     for (const [method, url] of routes) {
       const response = await call(db, { method, url, body: "{" });
@@ -262,7 +263,7 @@ test("creating a card ignores the client id and owner and stores the submitted s
     assert.equal(form.statusCode, 200);
     assert.match(form.body, /编辑调查员/);
     assert.match(form.body, /力量 STR/);
-    assert.match(form.body, /玩家显示名/);
+    assert.equal(form.body.includes("玩家显示名"), false);
     assert.equal(form.body.includes('name="ownerDiscordUserId"'), false);
     assert.equal(form.body.includes("<img"), false);
     assert.match(form.body, /&lt;img src=x onerror=alert\(1\)&gt;/);
@@ -374,6 +375,177 @@ test("duplicate stays with the same owner and delete removes only that card", as
     const page = await call(db, { url: "/investigators", cookie });
     assert.equal(page.statusCode, 302);
     assert.equal(page.headers.get("location"), "/auth/login");
+  });
+});
+
+test("coc7.json export downloads the stored card and import creates a new card for the current user", async () => {
+  await withDb(async (db) => {
+    const cookieA = sessionFor(db, USER_A);
+    const cookieB = sessionFor(db, USER_B);
+    const trickyName = "奈洛莉\"\r\n../x";
+    const created = await call(db, { method: "POST", url: "/api/characters", cookie: cookieA, body: validBody(trickyName) });
+    assert.equal(created.statusCode, 201);
+    const originalId = json(created).id;
+    const before = getCharacter(db, originalId);
+
+    const exported = await call(db, { url: `/api/characters/${originalId}/export`, cookie: cookieA });
+    assert.equal(exported.statusCode, 200);
+    assert.equal(exported.headers.get("content-type"), "application/json; charset=utf-8");
+    assert.equal(exported.headers.get("cache-control"), "no-store");
+    const disposition = exported.headers.get("content-disposition");
+    assert.equal(disposition.includes("\r") || disposition.includes("\n"), false);
+    assert.equal(disposition.includes("filename=\"investigator.coc7.json\""), true);
+    assert.equal(disposition.includes(`filename*=UTF-8''${encodeURIComponent("奈洛莉..x.coc7.json")}`), true);
+    const file = json(exported);
+    assert.deepEqual(file, before.character);
+    assert.equal(file.schemaVersion, 1);
+    assert.equal(file.ruleset, "coc7");
+    assert.equal(file.ownerDiscordUserId, USER_A);
+    assert.equal(Object.hasOwn(file, "derived"), false);
+    assert.equal(Object.hasOwn(file, "createdAt"), false);
+    assert.equal(Object.hasOwn(file, "updatedAt"), false);
+    assert.equal(file.identity.name, trickyName);
+
+    const roundTrip = await call(db, { method: "POST", url: "/api/characters/import", cookie: cookieA, body: file });
+    assert.equal(roundTrip.statusCode, 201);
+    const copiedId = json(roundTrip).id;
+    assert.match(copiedId, /^[0-9a-f-]{36}$/);
+    assert.equal(copiedId === originalId, false);
+    assert.equal(Object.hasOwn(json(roundTrip), "ownerDiscordUserId"), false);
+    const copied = getCharacter(db, copiedId).character;
+    assert.deepEqual(copied, { ...file, id: copiedId });
+    assert.deepEqual(getCharacter(db, originalId).character, before.character);
+    assert.equal(getCharacter(db, originalId).updatedAt, before.updatedAt);
+
+    const foreignFile = {
+      ...file,
+      id: originalId,
+      ownerDiscordUserId: USER_A,
+      background: { ...file.background, beliefs: "旧神已死" },
+      weapons: [{ name: "手电筒", type: "", skill: "", damage: "", note: "黄铜" }],
+      spells: [{ name: "神智复原" }],
+      initialSan: 50,
+      sanity: 12,
+    };
+    const imported = await call(db, { method: "POST", url: "/api/characters/import", cookie: cookieB, body: foreignFile });
+    assert.equal(imported.statusCode, 201);
+    const importedId = json(imported).id;
+    assert.equal(importedId === originalId, false);
+    const importedCard = getCharacter(db, importedId).character;
+    assert.equal(importedCard.ownerDiscordUserId, USER_B);
+    assert.equal(importedCard.identity.name, trickyName);
+    assert.equal(importedCard.background.beliefs, "旧神已死");
+    assert.deepEqual(importedCard.weapons, foreignFile.weapons);
+    assert.deepEqual(importedCard.spells, foreignFile.spells);
+    assert.equal(importedCard.initialSan, 50);
+    assert.equal(Object.hasOwn(importedCard, "sanity"), false);
+    assert.equal(getCharacter(db, originalId).character.ownerDiscordUserId, USER_A);
+    assert.equal(getCharacter(db, originalId).character.background.beliefs, "");
+    assert.deepEqual(json(await call(db, { url: "/api/characters", cookie: cookieA })).characters.map((card) => card.id).sort(), [originalId, copiedId].sort());
+    assert.deepEqual(json(await call(db, { url: "/api/characters", cookie: cookieB })).characters.map((card) => card.id), [importedId]);
+
+    const legacy = { ...file, id: originalId, ownerDiscordUserId: USER_B };
+    delete legacy.initialSan;
+    legacy.sanity = 42;
+    const migrated = await call(db, { method: "POST", url: "/api/characters/import", cookie: cookieA, body: legacy });
+    assert.equal(migrated.statusCode, 201);
+    const migratedCard = getCharacter(db, json(migrated).id).character;
+    assert.equal(migratedCard.initialSan, 42);
+    assert.equal(Object.hasOwn(migratedCard, "sanity"), false);
+    assert.equal(migratedCard.ownerDiscordUserId, USER_A);
+
+    const countBeforeRejects = json(await call(db, { url: "/api/characters", cookie: cookieA })).characters.length;
+    const presentShape = json(await call(db, { url: `/api/characters/${originalId}`, cookie: cookieA }));
+    const rejected = [
+      presentShape,
+      { ...file, schemaVersion: 2 },
+      { ...file, ruleset: "coc6" },
+      { ...file, skills: undefined },
+      { ...file, currentHp: 3 },
+      { ...file, identity: { ...file.identity, currentSan: 1 } },
+      { ...file, skills: [{ ...file.skills[0], base: 1 }] },
+      { ...file, pointBuy: { total: 100, includeLuck: false } },
+      "[",
+    ];
+    delete rejected[3].skills;
+    for (const body of rejected) {
+      const response = await call(db, { method: "POST", url: "/api/characters/import", cookie: cookieA, body });
+      assert.equal(response.statusCode, 400, JSON.stringify(body).slice(0, 80));
+    }
+    const oversized = await call(db, {
+      method: "POST",
+      url: "/api/characters/import",
+      cookie: cookieA,
+      body: "x".repeat(512 * 1024 + 1),
+    });
+    assert.equal(oversized.statusCode, 413);
+    assert.equal(json(oversized).error, "BODY_TOO_LARGE");
+    assert.equal(json(await call(db, { url: "/api/characters", cookie: cookieA })).characters.length, countBeforeRejects);
+    assert.deepEqual(getCharacter(db, originalId).character, before.character);
+
+    const missing = await call(db, { url: "/api/characters/missing-card/export", cookie: cookieA });
+    assert.equal(missing.statusCode, 404);
+    const foreignExport = await call(db, { url: `/api/characters/${originalId}/export`, cookie: cookieB });
+    assert.equal(foreignExport.statusCode, 403);
+    assert.equal(foreignExport.body.includes(trickyName), false);
+    const postExport = await call(db, { method: "POST", url: `/api/characters/${originalId}/export`, cookie: cookieA });
+    assert.equal(postExport.statusCode, 405);
+    assert.equal(postExport.headers.get("allow"), "GET");
+    const getImport = await call(db, { url: "/api/characters/import", cookie: cookieA });
+    assert.equal(getImport.statusCode, 405);
+    assert.equal(getImport.headers.get("allow"), "POST");
+
+    const list = await call(db, { url: "/investigators", cookie: cookieA });
+    assert.match(list.body, /导入为新卡/);
+    assert.match(list.body, /id="import-card"/);
+    assert.match(list.body, /id="import-errors"/);
+    assert.match(list.body, /accept="\.coc7\.json,\.json,application\/json"/);
+    assert.match(list.body, new RegExp(`/api/characters/${originalId}/export`));
+    assert.match(list.body, />导出</);
+    const edit = await call(db, { url: `/investigators/${originalId}/edit`, cookie: cookieA });
+    assert.match(edit.body, new RegExp(`/api/characters/${originalId}/export`));
+    assert.match(edit.body, /删除这张调查员卡？此操作不能撤销。/);
+    assert.match(edit.body, /\/\^-\?\\d\+\$\//);
+    const fresh = await call(db, { url: "/investigators/new", cookie: cookieA });
+    assert.equal(/\/api\/characters\/[^"]+\/export/.test(fresh.body), false);
+  });
+});
+
+test("an old player display name is hidden, left out of the file, and dropped on save", async () => {
+  await withDb(async (db) => {
+    const cookie = sessionFor(db, USER_A);
+    const legacy = minimalCharacter();
+    legacy.id = "legacy-player";
+    legacy.ownerDiscordUserId = USER_A;
+    legacy.identity.playerName = "纸面玩家";
+    const now = "2026-05-01T00:00:00.000Z";
+    db.prepare(`
+      INSERT INTO characters (
+        id, owner_discord_user_id, schema_version, ruleset, character_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(legacy.id, USER_A, 1, "coc7", JSON.stringify(legacy), now, now);
+
+    const page = await call(db, { url: "/investigators/legacy-player/edit", cookie });
+    assert.equal(page.statusCode, 200);
+    assert.equal(page.body.includes("玩家显示名"), false);
+    assert.equal(page.body.includes("纸面玩家"), false);
+    assert.match(page.body, /value="奈洛莉"/);
+    const fresh = await call(db, { url: "/investigators/new", cookie });
+    assert.equal(fresh.body.includes("玩家显示名"), false);
+
+    const exported = json(await call(db, { url: "/api/characters/legacy-player/export", cookie }));
+    assert.equal(Object.hasOwn(exported.identity, "playerName"), false);
+    assert.equal(exported.identity.name, "奈洛莉");
+    assert.equal(getCharacter(db, "legacy-player").character.identity.playerName, "纸面玩家");
+
+    const copied = await call(db, { method: "POST", url: "/api/characters/legacy-player/duplicate", cookie });
+    assert.equal(copied.statusCode, 201);
+    assert.equal(Object.hasOwn(getCharacter(db, json(copied).id).character.identity, "playerName"), false);
+
+    const saved = await call(db, { method: "PATCH", url: "/api/characters/legacy-player", cookie, body: exported });
+    assert.equal(saved.statusCode, 200);
+    assert.equal(Object.hasOwn(getCharacter(db, "legacy-player").character.identity, "playerName"), false);
+    assert.equal(getCharacter(db, "legacy-player").character.identity.name, "奈洛莉");
   });
 });
 

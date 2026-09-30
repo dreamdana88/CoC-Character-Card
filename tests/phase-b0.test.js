@@ -114,8 +114,8 @@ test("Phase B0 skeleton stays runnable", () => {
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
-  assert.match(readme, /Phase B5/);
+  assert.match(readme, /Phase B6/);
   assert.match(readme, /better-sqlite3/);
   assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
-  assert.match(agents, /B0、B1、B2、B3、B4、B5 已完成/);
+  assert.match(agents, /B0、B1、B2、B3、B4、B5、B6 已完成/);
 });

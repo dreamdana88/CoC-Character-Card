@@ -35,10 +35,12 @@ test("initialSan is an integer from 0 through 99 and can differ from POW", () =>
   assert.match(messages(validateCharacter(card)), /初始理智必须是整数/);
 });
 
-test("playerName is display text and does not replace the owner id", () => {
+test("a card has no player name, and the investigator name is not the owner id", () => {
   const card = minimalCharacter();
+  assert.equal(Object.hasOwn(card.identity, "playerName"), false);
+  assert.equal(validateCharacter(card).ok, true);
   delete card.ownerDiscordUserId;
-  card.identity.playerName = "100";
+  card.identity.name = "100";
   const result = validateCharacter(card);
   assert.equal(result.ok, false);
   assert.match(messages(result), /ownerDiscordUserId/);
@@ -118,6 +120,68 @@ test("custom occupation may exist but cannot list more than eight skills", () =>
 
   card.occupation.occupationalSkills = ["一", "二"];
   assert.equal(validateCharacter(card).ok, true);
+});
+
+test("overspent pools and an out-of-range credit rating cannot be saved", () => {
+  const overOccupation = minimalCharacter();
+  overOccupation.skills[0].occupationPoints = 321;
+  assert.match(messages(validateCharacter(overOccupation)), /职业点超过总额/);
+
+  const overInterest = minimalCharacter();
+  overInterest.skills[0].interestPoints = 151;
+  assert.match(messages(validateCharacter(overInterest)), /兴趣点超过总额/);
+
+  const mixed = minimalCharacter();
+  mixed.skills[0].occupationPoints = 40;
+  mixed.skills[0].interestPoints = 20;
+  mixed.skills[0].growth = 4;
+  assert.equal(validateCharacter(mixed).ok, true);
+
+  const negative = minimalCharacter();
+  negative.skills[0].occupationPoints = -1;
+  assert.match(messages(validateCharacter(negative)), /不能为负数/);
+
+  const custom = minimalCharacter();
+  custom.occupation.pointFormula = "CUSTOM";
+  custom.skills[0].occupationPoints = 999;
+  assert.equal(validateCharacter(custom).ok, true);
+
+  const low = minimalCharacter();
+  low.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 });
+  assert.match(messages(validateCharacter(low)), /信用评级必须在 30 到 70 之间/);
+
+  const high = minimalCharacter();
+  high.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 71, interestPoints: 0 });
+  assert.match(messages(validateCharacter(high)), /信用评级必须在 30 到 70 之间/);
+
+  const edge = minimalCharacter();
+  edge.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 70, interestPoints: 0 });
+  assert.equal(validateCharacter(edge).ok, true);
+});
+
+test("credit rating follows the selected occupation range", () => {
+  const card = minimalCharacter();
+  card.occupation.creditMin = 9;
+  card.occupation.creditMax = 30;
+  const credit = { name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 };
+  for (const [points, ok] of [[8, false], [9, true], [24, true], [30, true], [31, false]]) {
+    const sample = structuredClone(card);
+    sample.skills.push({ ...credit, occupationPoints: points });
+    const result = validateCharacter(sample);
+    assert.equal(result.ok, ok, String(points));
+    if (!ok) assert.match(messages(result), /信用评级必须在 9 到 30 之间/);
+  }
+
+  const summed = structuredClone(card);
+  summed.skills.push({ ...credit, occupationPoints: 20, interestPoints: 10, growth: 1 });
+  assert.equal(summed.skills.at(-1).base + 20 + 10 + 1, 31);
+  assert.match(messages(validateCharacter(summed)), /信用评级必须在 9 到 30 之间/);
+
+  const wider = structuredClone(card);
+  wider.occupation.creditMin = 5;
+  wider.occupation.creditMax = 75;
+  wider.skills.push({ ...credit, occupationPoints: 31 });
+  assert.equal(validateCharacter(wider).ok, true);
 });
 
 test("credit limits are not silently swapped", () => {

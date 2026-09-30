@@ -2,6 +2,15 @@ import { randomUUID } from "node:crypto";
 import { validateCharacter } from "../rules/validation.js";
 import { StorageError } from "./errors.js";
 
+function withoutPlayerName(card) {
+  if (!card?.identity || typeof card.identity !== "object" || Array.isArray(card.identity) || !Object.hasOwn(card.identity, "playerName")) {
+    return card;
+  }
+  const identity = { ...card.identity };
+  delete identity.playerName;
+  return { ...card, identity };
+}
+
 function assertValid(card) {
   const result = validateCharacter(card);
   if (result.ok) return;
@@ -75,10 +84,11 @@ function insertCharacter(db, card, createdAt, updatedAt) {
 }
 
 export function createCharacter(db, card, options = {}) {
-  assertValid(card);
+  const stored = withoutPlayerName(card);
+  assertValid(stored);
   const timestamp = currentTimestamp(options.now);
-  insertCharacter(db, card, timestamp, timestamp);
-  return getCharacter(db, card.id);
+  insertCharacter(db, stored, timestamp, timestamp);
+  return getCharacter(db, stored.id);
 }
 
 export function getCharacter(db, id) {
@@ -103,6 +113,7 @@ export function listCharactersByOwner(db, ownerDiscordUserId) {
 }
 
 export function updateCharacter(db, id, card, options = {}) {
+  card = withoutPlayerName(card);
   assertValid(card);
   requireId(id);
   if (card.id !== id) {
@@ -167,7 +178,7 @@ export function deleteCharacter(db, id, ownerDiscordUserId) {
 
 export function duplicateCharacter(db, id, ownerDiscordUserId, options = {}) {
   const row = ownedRow(db, id, ownerDiscordUserId);
-  const copy = parseStoredCharacter(row.character_json);
+  const copy = withoutPlayerName(parseStoredCharacter(row.character_json));
   copy.id = randomUUID();
   if (copy.ownerDiscordUserId !== row.owner_discord_user_id) {
     throw new StorageError("库存的所有者与角色卡 JSON 不一致", { code: "INTEGRITY" });

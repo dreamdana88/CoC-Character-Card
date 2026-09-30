@@ -6,7 +6,6 @@ export function minimalCharacter() {
     ownerDiscordUserId: "100",
     identity: {
       name: "奈洛莉",
-      playerName: "玩家甲",
       age: 28,
       sex: "女",
       era: "1920s",
@@ -59,7 +58,7 @@ export function minimalCharacter() {
       traits: "",
       scars: "",
       phobias: "",
-      manias: "",
+      personalHistory: "",
     },
     weapons: [],
     armor: null,

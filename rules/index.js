@@ -8,6 +8,7 @@ export {
   RULESET,
   SCHEMA_VERSION,
   isOccupationPointFormula,
+  readBackground,
 } from "./characterSchema.js";
 
 export {

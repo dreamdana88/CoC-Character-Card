@@ -8,6 +8,7 @@ import {
   isOccupationPointFormula,
 } from "./characterSchema.js";
 import { mythosPointError } from "./coc7.js";
+import { creditRatingError, pointPoolErrors } from "./sheet.js";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -104,7 +105,7 @@ export function validateCharacter(card) {
 
   const identity = requireObject(card.identity, "identity", fail);
   if (identity) {
-    for (const key of ["name", "playerName", "sex", "residence", "birthplace"]) {
+    for (const key of ["name", "sex", "residence", "birthplace"]) {
       requireString(identity, "identity", key, fail);
     }
     requireInteger(identity, "identity", "age", fail);
@@ -191,6 +192,10 @@ export function validateCharacter(card) {
       else requireString(spell, `spells[${index}]`, "name", fail, { allowEmpty: false });
     });
   }
+
+  for (const error of pointPoolErrors(card)) fail(error.path, error.message);
+  const credit = creditRatingError(card);
+  if (credit) fail(credit.path, credit.message);
 
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }

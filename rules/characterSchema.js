@@ -3,7 +3,6 @@ export const RULESET = "coc7";
 
 export const IDENTITY_FIELDS = Object.freeze([
   "name",
-  "playerName",
   "age",
   "sex",
   "era",
@@ -32,8 +31,26 @@ export const BACKGROUND_FIELDS = Object.freeze([
   "traits",
   "scars",
   "phobias",
-  "manias",
+  "personalHistory",
 ]);
+
+export function readBackground(background) {
+  const source = background && typeof background === "object" && !Array.isArray(background) ? background : {};
+  const out = {};
+  for (const key of BACKGROUND_FIELDS) {
+    if (typeof source[key] === "string") out[key] = source[key];
+  }
+  const phobia = typeof out.phobias === "string" ? out.phobias : "";
+  const mania = typeof source.manias === "string" ? source.manias.trim() : "";
+  if (mania) {
+    const lines = phobia.split("\n").map((line) => line.trim());
+    if (!lines.includes(mania)) out.phobias = [phobia.trim(), mania].filter(Boolean).join("\n");
+  } else if (typeof out.phobias !== "string") {
+    out.phobias = "";
+  }
+  if (typeof out.personalHistory !== "string") out.personalHistory = "";
+  return out;
+}
 
 export const ERAS = Object.freeze(["1920s", "现代", "其他"]);
 

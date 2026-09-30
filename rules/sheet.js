@@ -191,6 +191,58 @@ export function skillBaseErrors(card) {
   return errors;
 }
 
+function pointsAreIntegers(skills, field) {
+  return skills.every((skill) => integerOrNull(skill?.[field]) !== null);
+}
+
+export function pointPoolErrors(card) {
+  const errors = [];
+  const skills = Array.isArray(card?.skills) ? card.skills : [];
+  const formula = card?.occupation?.pointFormula;
+  if (pointsAreIntegers(skills, "occupationPoints") && formula && formula !== "CUSTOM" && OCCUPATION_POINT_FORMULAS.includes(formula)) {
+    try {
+      const total = calculateOccupationPoints(formula, card?.characteristics);
+      const remaining = remainingOccupationPoints(total, skills);
+      if (remaining < 0) {
+        errors.push({ path: "occupationPoints", message: `职业点超过总额，已用 ${total - remaining} / ${total}` });
+      }
+    } catch (error) {
+      if (!(error instanceof RuleError)) throw error;
+    }
+  }
+  const intelligence = integerOrNull(card?.characteristics?.int);
+  if (intelligence !== null && pointsAreIntegers(skills, "interestPoints")) {
+    const total = interestPointsTotal(intelligence);
+    const remaining = remainingInterestPoints(total, skills);
+    if (remaining < 0) {
+      errors.push({ path: "interestPoints", message: `兴趣点超过总额，已用 ${total - remaining} / ${total}` });
+    }
+  }
+  return errors;
+}
+
+export function creditRatingError(card) {
+  const skills = Array.isArray(card?.skills) ? card.skills : [];
+  const index = skills.findIndex((skill) => canonicalSkillName(typeof skill?.name === "string" ? skill.name : "") === "信用评级");
+  if (index < 0) return null;
+  const min = card?.occupation?.creditMin;
+  const max = card?.occupation?.creditMax;
+  if (!Number.isInteger(min) || !Number.isInteger(max)) return null;
+  const skill = skills[index];
+  if (!["base", "growth", "occupationPoints", "interestPoints"].every((key) => integerOrNull(skill?.[key]) !== null)) return null;
+  let rating;
+  try {
+    rating = skillRating(skill).regular;
+  } catch (error) {
+    if (error instanceof RuleError) return null;
+    throw error;
+  }
+  if (rating < min || rating > max) {
+    return { path: `skills[${index}]`, message: `信用评级必须在 ${min} 到 ${max} 之间` };
+  }
+  return null;
+}
+
 export function pointBuyUsage(characteristics, options = {}) {
   const total = options.total;
   if (typeof total !== "number" || !Number.isInteger(total) || total <= 0) {
@@ -231,6 +283,25 @@ function safe(label, fn) {
     if (error instanceof RuleError) return { ok: false, message: error.message };
     throw error;
   }
+}
+
+function creditView(draft) {
+  const min = draft?.occupation?.creditMin;
+  const max = draft?.occupation?.creditMax;
+  const error = creditRatingError(draft);
+  const skills = Array.isArray(draft?.skills) ? draft.skills : [];
+  const skill = skills.find((item) => canonicalSkillName(typeof item?.name === "string" ? item.name : "") === "信用评级");
+  let rating = null;
+  if (skill && ["base", "growth", "occupationPoints", "interestPoints"].every((key) => integerOrNull(skill?.[key]) !== null)) {
+    const result = safe("信用评级", () => skillRating(skill));
+    if (result.ok) rating = result.value.regular;
+  }
+  return {
+    min: Number.isInteger(min) ? min : null,
+    max: Number.isInteger(max) ? max : null,
+    rating,
+    error: error?.message ?? null,
+  };
 }
 
 function skillView(skill, characteristics) {
@@ -312,6 +383,7 @@ export function derivePreview(draft, options = {}) {
     age: age !== null && age >= 0 ? ageBandNote(age) : null,
     skills: skills.map((skill) => skillView(skill, characteristics)),
     skillBaseErrors: skillBaseErrors(draft),
+    credit: creditView(draft),
   };
   if (options.pointBuy) preview.pointBuy = pointBuyUsage(characteristics, options.pointBuy);
   return preview;

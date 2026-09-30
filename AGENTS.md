@@ -28,7 +28,7 @@ rules/      纯函数。测试不连 Discord，不引用 TeaParty-Bell 源码
 tests/
 ```
 
-一次只做当前 Phase：`B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8`。B0、B1、B2、B3、B4、B5 已完成。用户没点名下一个阶段，就停在当前阶段。每个阶段带测试，通过后再进下一个。
+一次只做当前 Phase：`B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8`。B0、B1、B2、B3、B4、B5、B6 已完成。用户没点名下一个阶段，就停在当前阶段。每个阶段带测试，通过后再进下一个。
 
 B6 只做本站 `*.coc7.json` 的导出和导入。`TL COC CARD.xlsx` 导入和 Excel 导出已取消。
 
@@ -49,7 +49,7 @@ docs/reference/coc-phase0-audit.md
 
 ## 产品决定
 
-身份写 PL。所有权只认 Discord User ID。
+身份写 PL。所有权只认 Discord User ID。卡面不设玩家名。姓名是调查员的名字。
 
 长期卡保存基础值、初始值和可推导字段，包括幸运。本局 HP / SAN / MP / Luck 消耗、伤势、疯狂、死亡不写回长期卡。
 

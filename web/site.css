@@ -69,6 +69,10 @@ ul.cards li {
   margin: 0.6rem 0;
 }
 
+.import-card {
+  margin: 0 0 1rem;
+}
+
 h2 {
   font-size: 1.1rem;
   margin-top: 1.4rem;
@@ -156,4 +160,84 @@ dialog {
 #age-note,
 #point-buy-status {
   white-space: pre-wrap;
+}
+
+.point-status {
+  border: 1px solid #ccc;
+  padding: 0.6rem 0.75rem;
+  margin: 0.8rem 0;
+}
+
+.point-status-error {
+  border-color: #8a1f1f;
+}
+
+.skill-toolbar,
+.skill-head,
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.skill-row {
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin: 0.6rem 0;
+}
+
+.skill-title {
+  font-weight: 700;
+  margin: 0.35rem 0;
+}
+
+.skill-row input[data-field="name"],
+.skill-row input[data-field="specialty"] {
+  width: auto;
+  flex: 1 1 8rem;
+  margin-top: 0;
+}
+
+.base-line {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.base-line input {
+  width: 4rem;
+  margin: 0;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.stepper input {
+  width: 4rem;
+  margin: 0;
+  text-align: center;
+}
+
+.stepper button {
+  width: 2.2rem;
+}
+
+.stepper[hidden] {
+  display: none;
+}
+
+#point-pools {
+  font-weight: 700;
+  margin: 0;
+}
+
+#skill-picker-list {
+  width: 100%;
+  min-height: 10rem;
 }

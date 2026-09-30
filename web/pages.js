@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from "../auth/constants.js";
 import { AuthError, authStatus } from "../auth/errors.js";
 import { readCookie } from "../auth/http.js";
 import { readSession } from "../auth/store.js";
-import { BACKGROUND_FIELDS, CHARACTERISTIC_FIELDS, ERAS } from "../rules/characterSchema.js";
+import { BACKGROUND_FIELDS, CHARACTERISTIC_FIELDS, ERAS, readBackground } from "../rules/characterSchema.js";
 import { OCCUPATIONS } from "../rules/data/occupations.js";
 import { WEAPON_CATEGORIES, WEAPONS } from "../rules/data/weapons.js";
 import {
@@ -28,7 +28,6 @@ const editorSource = readFileSync(join(webDir, "editor.js"), "utf8");
 
 const IDENTITY_LABELS = [
   ["name", "姓名", false],
-  ["playerName", "玩家显示名", false],
   ["age", "年龄", true],
   ["sex", "性别", false],
   ["era", "时代", false],
@@ -56,8 +55,8 @@ const BACKGROUND_LABELS = new Map([
   ["treasuredPossessions", "宝贵之物"],
   ["traits", "特质"],
   ["scars", "伤疤"],
-  ["phobias", "恐惧症"],
-  ["manias", "躁狂症"],
+  ["phobias", "恐惧症/狂躁症"],
+  ["personalHistory", "个人经历说明"],
 ]);
 
 const SESSION_FAILURES = new Set([
@@ -193,9 +192,11 @@ function listPage(records) {
     : `<ul class="cards">${records.map((record) => {
       const id = escapeHtml(record.character.id);
       const href = `/investigators/${escapeHtml(encodeURIComponent(record.character.id))}/edit`;
-      return `<li><a href="${href}">${escapeHtml(displayName(record.character.identity))}</a> <a href="${href}">编辑</a> <button type="button" data-duplicate="${id}">复制</button> <button type="button" data-delete="${id}">删除</button></li>`;
+      const exportHref = `/api/characters/${escapeHtml(encodeURIComponent(record.character.id))}/export`;
+      return `<li><a href="${href}">${escapeHtml(displayName(record.character.identity))}</a> <a href="${href}">编辑</a> <a href="${exportHref}">导出</a> <button type="button" data-duplicate="${id}">复制</button> <button type="button" data-delete="${id}">删除</button></li>`;
     }).join("")}</ul>`;
-  return layout("我的调查员", `<h1>我的调查员</h1>${items}`);
+  const importer = `<form id="import-card" class="import-card"><label>导入为新卡<input type="file" accept=".coc7.json,.json,application/json"></label><button type="submit">导入为新卡</button><p class="errors" id="import-errors"></p></form>`;
+  return layout("我的调查员", `<h1>我的调查员</h1>${importer}${items}`);
 }
 
 function identityControl(key, label, integer, identity) {
@@ -264,22 +265,18 @@ function derivedText(preview) {
   ].map(([label, value]) => `${label}：${show(value)}`).join("\n");
 }
 
-function occupationLine(preview) {
-  const pool = preview.occupationPoints;
+function poolLine(label, pool) {
   if (pool?.message) return pool.message;
-  if (pool?.total != null) return `职业点总额 ${pool.total}，已用 ${show(pool.spent)}，剩余 ${show(pool.remaining)}`;
-  return "";
+  if (pool?.total == null) return "";
+  return `${label}：${pool.total} / 已用 ${show(pool.spent)} / 剩余 ${show(pool.remaining)}`;
+}
+
+function occupationLine(preview) {
+  return poolLine("职业点", preview.occupationPoints);
 }
 
 function pointPoolText(preview) {
-  const lines = [];
-  const occupation = occupationLine(preview);
-  if (occupation) lines.push(occupation);
-  const interest = preview.interestPoints;
-  if (interest?.total != null) {
-    lines.push(`兴趣点总额 ${interest.total}，已用 ${show(interest.spent)}，剩余 ${show(interest.remaining)}`);
-  }
-  return lines.join("\n");
+  return [occupationLine(preview), poolLine("兴趣点", preview.interestPoints)].filter(Boolean).join("\n");
 }
 
 function ageText(preview) {
@@ -294,19 +291,42 @@ function formulaOptions(selected) {
   }).join("");
 }
 
-function skillRow(skill, view) {
-  const rating = view?.rating ? `${view.rating.regular} / ${view.rating.hard} / ${view.rating.extreme}` : "";
-  return `<tr class="skill-row">
-<td><input data-field="name" list="skill-names" value="${escapeHtml(skill?.name ?? "")}"></td>
-<td><input data-field="specialty" value="${escapeHtml(skill?.specialty ?? "")}"></td>
-<td><input data-field="base" data-integer="true" value="${escapeHtml(skill?.base ?? "")}"></td>
-<td><input data-field="growth" data-integer="true" value="${escapeHtml(skill?.growth ?? 0)}"></td>
-<td><input data-field="occupationPoints" data-integer="true" value="${escapeHtml(skill?.occupationPoints ?? 0)}"></td>
-<td><input data-field="interestPoints" data-integer="true" value="${escapeHtml(skill?.interestPoints ?? 0)}"></td>
-<td data-rating>${escapeHtml(rating)}</td>
-<td data-mythos>${escapeHtml(view?.mythosError ?? "")}</td>
-<td><button type="button" data-remove-skill>删除</button></td>
-</tr>`;
+function skillTitle(skill) {
+  const name = typeof skill?.name === "string" ? skill.name.trim() : "";
+  const specialty = typeof skill?.specialty === "string" ? skill.specialty.trim() : "";
+  return specialty ? `${name} - ${specialty}` : name;
+}
+
+function ratingText(view) {
+  if (!view?.rating) return "";
+  return `成功率：${view.rating.regular}%  困难 ${view.rating.hard} / 极难 ${view.rating.extreme}`;
+}
+
+function stepper(label, field, value, { hidden = false, disabled = false } = {}) {
+  const hiddenAttr = hidden ? " hidden" : "";
+  const disabledAttr = disabled ? " disabled" : "";
+  return `<label class="stepper" data-pool="${field}"${hiddenAttr}>${label} <button type="button" data-step="-1"${disabledAttr}>-</button><input data-field="${field}" data-integer="true" inputmode="numeric" value="${escapeHtml(value)}"${disabledAttr}><button type="button" data-step="1"${disabledAttr}>+</button></label>`;
+}
+
+function skillRow(skill, view, { occupational, credit }) {
+  const name = typeof skill?.name === "string" ? skill.name.trim() : "";
+  const mythos = view?.mythos === true;
+  const onOccupationPage = occupational || name === "信用评级";
+  const creditText = name === "信用评级" && Number.isInteger(credit?.min) && Number.isInteger(credit?.max)
+    ? `信用评级（${credit.min}～${credit.max}）`
+    : "";
+  return `<article class="skill-row" data-occupational="${onOccupationPage ? "true" : "false"}" data-mythos="${mythos ? "true" : "false"}"${onOccupationPage ? "" : " hidden"}>
+<header class="skill-head"><input data-field="name" list="skill-names" value="${escapeHtml(skill?.name ?? "")}"><input data-field="specialty" value="${escapeHtml(skill?.specialty ?? "")}"><button type="button" data-remove-skill>删除</button></header>
+<p class="skill-title">${escapeHtml(skillTitle(skill))}</p>
+<p data-rating>${escapeHtml(ratingText(view))}</p>
+<p data-credit-range${creditText ? "" : " hidden"}>${escapeHtml(creditText)}</p>
+<p data-mythos>${escapeHtml(view?.mythosError ?? "")}</p>
+<label class="base-line">基础值 <input data-field="base" data-integer="true" inputmode="numeric" value="${escapeHtml(skill?.base ?? "")}"${typeof view?.expectedBase === "number" ? " readonly" : ""}></label>
+${stepper("职业点", "occupationPoints", skill?.occupationPoints ?? 0, { hidden: mythos, disabled: mythos })}
+${stepper("兴趣点", "interestPoints", skill?.interestPoints ?? 0, { hidden: true, disabled: mythos })}
+${stepper("成长", "growth", skill?.growth ?? 0, { hidden: true })}
+<p class="errors" data-row-error>${name === "信用评级" && credit?.error ? escapeHtml(credit.error) : ""}</p>
+</article>`;
 }
 
 function weaponCell(weapon, key, integer = false) {
@@ -337,7 +357,7 @@ function formPage({ mode, record, notice }) {
   const characteristics = card?.characteristics ?? {};
   const occupation = card?.occupation ?? EMPTY_OCCUPATION;
   const skills = card?.skills ?? starterSkills();
-  const background = card?.background ?? {};
+  const background = readBackground(card?.background);
   const weapons = card?.weapons ?? [];
   const armor = card?.armor ?? null;
   const possessions = card?.possessions ?? { items: [] };
@@ -355,6 +375,7 @@ function formPage({ mode, record, notice }) {
   }).join("");
   const formulaLabel = FORMULA_LABELS.find(([value]) => value === occupation.pointFormula)?.[1] ?? "";
   const occupationalNames = Array.isArray(occupation.occupationalSkills) ? occupation.occupationalSkills : [];
+  const occupationalNameSet = new Set(occupationalNames.map((name) => String(name).trim()).filter(Boolean));
   const summary = [
     `职业名：${occupation.name?.trim() || "未填写"}`,
     `职业点公式：${formulaLabel}`,
@@ -369,8 +390,9 @@ function formPage({ mode, record, notice }) {
   const armorChecked = armor ? " checked" : "";
   const armorHidden = armor ? "" : " hidden";
   const movChecked = armor?.applyMovPenalty === true ? " checked" : "";
+  const exportHref = `/api/characters/${escapeHtml(encodeURIComponent(id))}/export`;
   const extra = editing
-    ? `<div class="actions"><button type="button" data-duplicate="${escapeHtml(id)}">复制</button> <button type="button" data-delete="${escapeHtml(id)}">删除</button></div>`
+    ? `<div class="actions"><a href="${exportHref}">导出</a> <button type="button" data-duplicate="${escapeHtml(id)}">复制</button> <button type="button" data-delete="${escapeHtml(id)}">删除</button></div>`
     : "";
   return layout(editing ? "编辑调查员" : "新建调查员", `${noticeHtml}
 <h1>${editing ? "编辑调查员" : "新建调查员"}</h1>
@@ -411,16 +433,26 @@ ${identityHtml}
 <div id="occupational-skills">${occupationalNames.map((name) => occupationalRow(name)).join("")}</div>
 <button type="button" id="add-occupational-skill">增加本职技能</button>
 <pre id="occupation-summary">${escapeHtml(summary)}</pre>
-<h2>技能</h2>
-<p>固定基础值按技能名自动填入。闪避、母语，以及格斗、射击的专攻会随属性或专攻更新。</p>
+<div id="point-status" class="point-status">
 <pre id="point-pools">${escapeHtml(pointPoolText(preview))}</pre>
-<div class="table-wrap">
-<table>
-<thead><tr><th>技能</th><th>专攻</th><th>基础</th><th>成长</th><th>职业点</th><th>兴趣点</th><th>普通 / 困难 / 极难</th><th></th><th></th></tr></thead>
-<tbody id="skill-rows">${skills.map((skill, index) => skillRow(skill, preview.skills[index])).join("")}</tbody>
-</table>
+<p>技能上限：职业 99 兴趣 99</p>
+<p id="point-errors" class="errors"></p>
 </div>
-<button type="button" id="add-skill">增加技能</button>
+<h2>技能</h2>
+<div class="sheet-tabs" role="tablist">
+<button type="button" data-skill-view="occupation" aria-selected="true">本职</button>
+<button type="button" data-skill-view="interest" aria-selected="false">兴趣</button>
+</div>
+<div class="skill-toolbar">
+<button type="button" id="choose-skill">选择技能</button>
+<label class="switch">混点 <input type="checkbox" id="mix-points"></label>
+<label class="switch">成长 <input type="checkbox" id="show-growth"></label>
+</div>
+<p>固定基础值按技能名自动填入。闪避、母语，以及格斗、射击的专攻会随属性或专攻更新。任选技能要自己加进本职技能。</p>
+<div id="skill-rows">${skills.map((skill, index) => skillRow(skill, preview.skills[index], {
+    occupational: occupationalNameSet.has(String(skill?.name ?? "").trim()),
+    credit: preview.credit,
+  })).join("")}</div>
 </section>
 <section id="panel-story" data-panel="story" role="tabpanel" aria-labelledby="tab-story" hidden>
 ${backgroundHtml}
@@ -473,6 +505,14 @@ ${catalogScript("weapon-catalog", WEAPONS)}
 <p id="roll-error" class="errors"></p>
 <div class="actions"><button type="button" id="start-rolls">开始骰点</button> <button type="button" id="close-rolls">关闭</button></div>
 <div id="roll-results"></div>
+</dialog>
+<dialog id="skill-picker">
+<label>搜索技能<input id="skill-search"></label>
+<select id="skill-picker-list" size="8"></select>
+<label>专攻<input id="skill-picker-specialty"></label>
+<label>自定义技能名<input id="skill-picker-custom"></label>
+<p id="skill-picker-error" class="errors"></p>
+<div class="actions"><button type="button" id="skill-picker-add">加入</button> <button type="button" id="skill-picker-close">关闭</button></div>
 </dialog>
 <dialog id="point-buy-dialog">
 <p>购点时每项属性是 0 到 90 的整数，幸运不计入总额时也一样。</p>

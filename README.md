@@ -1,6 +1,6 @@
 # CoC-Character-Card
 
-CoC 7 角色卡中心。当前做到 Phase B5：登录后可以填写、保存、复制和删除完整的 CoC7 调查员卡。没有 Internal API，也不连接 TeaParty-Bell。
+CoC 7 角色卡中心。当前做到 Phase B6：登录后可以填写、保存、复制和删除完整的 CoC7 调查员卡，并导出、导入本站的 `*.coc7.json`。导入后的卡属于当前登录用户。没有 Internal API，也不连接 TeaParty-Bell。
 
 ## 规则
 

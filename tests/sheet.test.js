@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OCCUPATION_POINT_FORMULAS } from "../rules/characterSchema.js";
-import { calculateOccupationPoints, interestPointsTotal } from "../rules/coc7.js";
+import { readFileSync } from "node:fs";
+import { calculateOccupationPoints, interestPointsTotal, skillRating } from "../rules/coc7.js";
 import {
   FIGHTING_SPECIALTY_BASES,
   FIREARMS_SPECIALTY_BASES,
   FORMULA_LABELS,
+  creditRatingError,
   derivePreview,
   describeCharacteristicSet,
   expectedSkillBase,
   pointBuyUsage,
+  pointPoolErrors,
   rollCharacteristicSets,
   skillBaseErrors,
   starterSkills,
@@ -242,4 +245,66 @@ test("starter skills only include audited bases", () => {
   assert.equal(byName.get("射击").specialty, "步枪/霰弹枪");
   assert.equal(byName.get("射击").base, 25);
   assert.equal(skills.some((skill) => skill.name === "人类学"), false);
+});
+
+test("skill pools, credit range, and final rating use the existing rules", () => {
+  const card = minimalCharacter();
+  assert.equal(derivePreview(card).occupationPoints.total, calculateOccupationPoints("EDU_X4", card.characteristics));
+  assert.equal(derivePreview(card).interestPoints.total, interestPointsTotal(card.characteristics.int));
+  assert.equal(interestPointsTotal(card.characteristics.int), card.characteristics.int * 2);
+
+  card.skills[0].occupationPoints = 200;
+  card.skills[0].interestPoints = 70;
+  const within = derivePreview(card);
+  assert.equal(within.occupationPoints.spent, 200);
+  assert.equal(within.occupationPoints.remaining, 120);
+  assert.equal(within.interestPoints.spent, 70);
+  assert.equal(within.interestPoints.remaining, 80);
+  assert.equal(pointPoolErrors(card).length, 0);
+
+  card.skills[0].growth = 3;
+  const rating = skillRating(card.skills[0]);
+  assert.equal(rating.regular, card.skills[0].base + card.skills[0].occupationPoints + card.skills[0].interestPoints + card.skills[0].growth);
+  assert.equal(derivePreview(card).skills[0].rating.regular, rating.regular);
+  assert.equal(derivePreview(card).skills[0].rating.hard, rating.hard);
+  assert.equal(derivePreview(card).skills[0].rating.extreme, rating.extreme);
+
+  card.skills[0].occupationPoints = 321;
+  card.skills[0].interestPoints = 0;
+  card.skills[0].growth = 0;
+  assert.match(pointPoolErrors(card)[0].message, /职业点超过总额，已用 321 \/ 320/);
+
+  card.skills[0].occupationPoints = 40;
+  card.skills[0].interestPoints = 151;
+  assert.match(pointPoolErrors(card).map((error) => error.message).join("\n"), /兴趣点超过总额，已用 151 \/ 150/);
+
+  const custom = minimalCharacter();
+  custom.occupation.pointFormula = "CUSTOM";
+  custom.skills[0].occupationPoints = 999;
+  assert.equal(pointPoolErrors(custom).length, 0);
+
+  assert.equal(creditRatingError(minimalCharacter()), null);
+  const credit = minimalCharacter();
+  credit.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 29, interestPoints: 0 });
+  assert.match(creditRatingError(credit).message, /信用评级必须在 30 到 70 之间/);
+  assert.equal(derivePreview(credit).credit.rating, 29);
+  assert.equal(derivePreview(credit).credit.error, creditRatingError(credit).message);
+  credit.skills.at(-1).occupationPoints = 30;
+  assert.equal(creditRatingError(credit), null);
+  credit.skills.at(-1).occupationPoints = 70;
+  assert.equal(creditRatingError(credit), null);
+  credit.skills.at(-1).interestPoints = 1;
+  assert.equal(derivePreview(credit).credit.rating, skillRating(credit.skills.at(-1)).regular);
+  assert.match(creditRatingError(credit).message, /30 到 70/);
+});
+
+test("mix and growth toggles only change the skill page controls", () => {
+  const editor = readFileSync(new URL("../web/editor.js", import.meta.url), "utf8");
+  const controls = editor.slice(editor.indexOf("function applyPointControls"), editor.indexOf("function applySkillView"));
+  assert.equal(controls.includes(".value"), false);
+  assert.match(editor, /mixPoints = event\.currentTarget\.checked;\s*applyPointControls\(\);/);
+  assert.match(editor, /showGrowth = event\.currentTarget\.checked;\s*applyPointControls\(\);/);
+  const step = editor.slice(editor.indexOf("function stepPoint"), editor.indexOf("function optionValues"));
+  assert.equal(step.includes("/api/characters"), false);
+  assert.match(step, /refreshPreview/);
 });
