@@ -144,6 +144,87 @@ test("required skill abbreviations map, and choices stay manual", () => {
   assert.equal(stunt.occupationalSkills.includes("驾驶"), false);
 });
 
+test("workbook skill names map onto the skill list", () => {
+  const byName = (name) => OCCUPATIONS.find((item) => item.name === name);
+  const keeper = byName("饲养员");
+  assert.equal(keeper.skillText.startsWith("驯兽，"), true);
+  assert.equal(keeper.occupationalSkills.includes("动物驯养"), true);
+  assert.equal(keeper.occupationalSkills.includes("博物学"), true);
+
+  for (const name of ["运动员（网球）", "司法科学家", "服装设计师", "厨师"]) {
+    const occupation = byName(name);
+    assert.equal(occupation.skillText.includes("侦察"), true, name);
+    assert.equal(occupation.occupationalSkills.includes("侦查"), true, name);
+  }
+
+  for (const name of ["司法科学家", "勘测员", "医疗技术员"]) {
+    const occupation = byName(name);
+    assert.equal(occupation.skillText.includes("艺术（摄影）"), true, name);
+    assert.equal(occupation.occupationalSkills.includes("技艺"), true, name);
+  }
+  const filmmaker = byName("电影摄制人员");
+  assert.equal(filmmaker.skillText.includes("艺术/工艺"), true);
+  assert.equal(filmmaker.occupationalSkills.includes("技艺"), true);
+  const cook = byName("厨师");
+  assert.equal(cook.skillText.includes("手艺（烹饪）"), true);
+  assert.equal(cook.occupationalSkills.includes("技艺"), true);
+
+  const archaeologist = byName("考古学家");
+  assert.equal(archaeologist.skillText.includes("其他语言（欧洲）"), true);
+  assert.equal(archaeologist.skillText.includes("艺术（任意）"), true);
+  assert.equal(archaeologist.occupationalSkills.includes("外语"), true);
+  assert.equal(archaeologist.occupationalSkills.includes("技艺"), true);
+  assert.equal(archaeologist.occupationalSkills.includes("考古学"), false);
+  const writer = byName("作家");
+  assert.equal(writer.skillText.includes("其他语言（欧洲）"), true);
+  assert.equal(writer.skillText.includes("艺术（写作）"), true);
+  assert.equal(writer.occupationalSkills.includes("外语"), true);
+  assert.equal(writer.occupationalSkills.includes("技艺"), true);
+  const priest = byName("牧师");
+  assert.equal(priest.skillText.includes("拉丁语"), true);
+  assert.equal(priest.occupationalSkills.includes("外语"), true);
+
+  const student = byName("女学生");
+  assert.equal(student.skillText.includes("自行车驾驶"), true);
+  assert.equal(student.skillText.includes("艺术/ 工艺"), true);
+  assert.equal(student.skillText.includes("格斗（矛）或射击（弓术）"), true);
+  assert.equal(student.occupationalSkills.includes("驾驶"), true);
+  assert.equal(student.occupationalSkills.includes("技艺"), true);
+  assert.equal(student.occupationalSkills.includes("格斗"), false);
+  assert.equal(student.occupationalSkills.includes("射击"), false);
+  const driver = byName("马车夫");
+  assert.equal(driver.skillText.includes("马车驾驶"), true);
+  assert.equal(driver.occupationalSkills.includes("驾驶"), true);
+  const laborer = byName("劳工");
+  assert.equal(laborer.skillText.includes("重型机械操作"), true);
+  assert.equal(laborer.occupationalSkills.includes("操作重型机械"), true);
+  assert.equal(laborer.skillText.includes("手艺（任意）"), true);
+  assert.equal(laborer.skillText.includes("马车驾驶"), true);
+  assert.equal(laborer.occupationalSkills.includes("技艺"), false);
+  assert.equal(laborer.occupationalSkills.includes("驾驶"), false);
+  assert.equal(laborer.occupationalSkills.includes("攀爬"), false);
+
+  const sailor = OCCUPATIONS.find((item) => item.skillText.includes("电工或机械维修"));
+  assert.equal(sailor.occupationalSkills.includes("电气维修"), false);
+  assert.equal(sailor.occupationalSkills.includes("机械维修"), false);
+  const intern = byName("学生、实习生");
+  assert.equal(intern.skillText.includes("语言（母语或外语）"), true);
+  assert.equal(intern.occupationalSkills.includes("母语"), false);
+  assert.equal(intern.occupationalSkills.includes("外语"), false);
+  const monk = byName("神职人员(和尚,尼姑)");
+  assert.equal(monk.skillText.includes("历史或图书馆"), true);
+  assert.equal(monk.skillText.includes("艺术（书法）"), true);
+  assert.equal(monk.occupationalSkills.includes("历史"), false);
+  assert.equal(monk.occupationalSkills.includes("图书馆使用"), false);
+  assert.equal(monk.occupationalSkills.includes("技艺"), true);
+  const pupil = byName("高中生(教育60以下)");
+  assert.equal(pupil.skillText.includes("科学（任一）或历史"), true);
+  assert.equal(pupil.skillText.includes("外语（英语或其他）"), true);
+  assert.equal(pupil.occupationalSkills.includes("科学"), false);
+  assert.equal(pupil.occupationalSkills.includes("历史"), false);
+  assert.equal(pupil.occupationalSkills.includes("外语"), true);
+});
+
 test("weapons come from the workbook catalog", () => {
   assert.deepEqual(WEAPON_CATEGORIES, ["常规武器", "手枪", "步枪", "霰弹枪", "突击步枪", "冲锋枪", "机枪", "特殊武器"]);
   const explanationNames = ["受伤程度", "轻度", "中度", "重度", "致命", "终结", "血肉横飞", "护甲调整", "关于霰弹枪"];
