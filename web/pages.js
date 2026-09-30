@@ -308,24 +308,27 @@ function stepper(label, field, value, { hidden = false, disabled = false } = {})
   return `<label class="stepper" data-pool="${field}"${hiddenAttr}>${label} <button type="button" data-step="-1"${disabledAttr}>-</button><input data-field="${field}" data-integer="true" inputmode="numeric" value="${escapeHtml(value)}"${disabledAttr}><button type="button" data-step="1"${disabledAttr}>+</button></label>`;
 }
 
-function skillRow(skill, view, { occupational, credit }) {
+function skillRow(skill, view, { occupational, credit, creditLocked }) {
   const name = typeof skill?.name === "string" ? skill.name.trim() : "";
   const mythos = view?.mythos === true;
   const onOccupationPage = occupational || name === "信用评级";
+  const occupationPoints = Number(skill?.occupationPoints);
+  const illegalOccupation = !onOccupationPage && Number.isInteger(occupationPoints) && occupationPoints > 0;
   const creditText = name === "信用评级" && Number.isInteger(credit?.min) && Number.isInteger(credit?.max)
     ? `信用评级（${credit.min}～${credit.max}）`
     : "";
-  return `<article class="skill-row" data-occupational="${onOccupationPage ? "true" : "false"}" data-mythos="${mythos ? "true" : "false"}"${onOccupationPage ? "" : " hidden"}>
-<header class="skill-head"><input data-field="name" list="skill-names" value="${escapeHtml(skill?.name ?? "")}"><input data-field="specialty" value="${escapeHtml(skill?.specialty ?? "")}"><button type="button" data-remove-skill>删除</button></header>
+  const rowError = view?.occupationPointError || (name === "信用评级" && credit?.error ? credit.error : "");
+  return `<article class="skill-row" data-occupational="${onOccupationPage ? "true" : "false"}" data-mythos="${mythos ? "true" : "false"}" data-illegal-occupation="${illegalOccupation ? "true" : "false"}"${onOccupationPage ? "" : " hidden"}>
+<header class="skill-head"><input data-field="name" list="skill-names" value="${escapeHtml(skill?.name ?? "")}"><input data-field="specialty" value="${escapeHtml(skill?.specialty ?? "")}"><button type="button" data-remove-skill${creditLocked ? " hidden" : ""}>删除</button></header>
 <p class="skill-title">${escapeHtml(skillTitle(skill))}</p>
 <p data-rating>${escapeHtml(ratingText(view))}</p>
 <p data-credit-range${creditText ? "" : " hidden"}>${escapeHtml(creditText)}</p>
 <p data-mythos>${escapeHtml(view?.mythosError ?? "")}</p>
 <label class="base-line">基础值 <input data-field="base" data-integer="true" inputmode="numeric" value="${escapeHtml(skill?.base ?? "")}"${typeof view?.expectedBase === "number" ? " readonly" : ""}></label>
-${stepper("职业点", "occupationPoints", skill?.occupationPoints ?? 0, { hidden: mythos, disabled: mythos })}
+${stepper("职业点", "occupationPoints", skill?.occupationPoints ?? 0, { hidden: mythos || (!onOccupationPage && !illegalOccupation), disabled: mythos })}
 ${stepper("兴趣点", "interestPoints", skill?.interestPoints ?? 0, { hidden: true, disabled: mythos })}
 ${stepper("成长", "growth", skill?.growth ?? 0, { hidden: true })}
-<p class="errors" data-row-error>${name === "信用评级" && credit?.error ? escapeHtml(credit.error) : ""}</p>
+<p class="errors" data-row-error>${escapeHtml(rowError)}</p>
 </article>`;
 }
 
@@ -376,6 +379,8 @@ function formPage({ mode, record, notice }) {
   const formulaLabel = FORMULA_LABELS.find(([value]) => value === occupation.pointFormula)?.[1] ?? "";
   const occupationalNames = Array.isArray(occupation.occupationalSkills) ? occupation.occupationalSkills : [];
   const occupationalNameSet = new Set(occupationalNames.map((name) => String(name).trim()).filter(Boolean));
+  const occupationChosen = typeof occupation.id === "string" && occupation.id.trim() !== "" && occupation.id !== "unset";
+  const creditCount = skills.filter((skill) => String(skill?.name ?? "").trim() === "信用评级").length;
   const summary = [
     `职业名：${occupation.name?.trim() || "未填写"}`,
     `职业点公式：${formulaLabel}`,
@@ -435,7 +440,6 @@ ${identityHtml}
 <pre id="occupation-summary">${escapeHtml(summary)}</pre>
 <div id="point-status" class="point-status">
 <pre id="point-pools">${escapeHtml(pointPoolText(preview))}</pre>
-<p>技能上限：职业 99 兴趣 99</p>
 <p id="point-errors" class="errors"></p>
 </div>
 <h2>技能</h2>
@@ -452,6 +456,7 @@ ${identityHtml}
 <div id="skill-rows">${skills.map((skill, index) => skillRow(skill, preview.skills[index], {
     occupational: occupationalNameSet.has(String(skill?.name ?? "").trim()),
     credit: preview.credit,
+    creditLocked: occupationChosen && creditCount <= 1 && String(skill?.name ?? "").trim() === "信用评级",
   })).join("")}</div>
 </section>
 <section id="panel-story" data-panel="story" role="tabpanel" aria-labelledby="tab-story" hidden>

@@ -221,10 +221,33 @@ export function pointPoolErrors(card) {
   return errors;
 }
 
+function creditSkillIndexes(skills) {
+  const indexes = [];
+  skills.forEach((skill, index) => {
+    const name = canonicalSkillName(typeof skill?.name === "string" ? skill.name : "");
+    if (name === "信用评级") indexes.push(index);
+  });
+  return indexes;
+}
+
+function occupationIsSelected(occupation) {
+  const id = typeof occupation?.id === "string" ? occupation.id.trim() : "";
+  return id !== "" && id !== "unset";
+}
+
 export function creditRatingError(card) {
   const skills = Array.isArray(card?.skills) ? card.skills : [];
-  const index = skills.findIndex((skill) => canonicalSkillName(typeof skill?.name === "string" ? skill.name : "") === "信用评级");
-  if (index < 0) return null;
+  const indexes = creditSkillIndexes(skills);
+  if (indexes.length > 1) {
+    return { path: `skills[${indexes[1]}]`, message: "信用评级只能有一条" };
+  }
+  if (indexes.length === 0) {
+    if (occupationIsSelected(card?.occupation)) {
+      return { path: "skills", message: "选定职业后必须有一条信用评级" };
+    }
+    return null;
+  }
+  const index = indexes[0];
   const min = card?.occupation?.creditMin;
   const max = card?.occupation?.creditMax;
   if (!Number.isInteger(min) || !Number.isInteger(max)) return null;
@@ -241,6 +264,27 @@ export function creditRatingError(card) {
     return { path: `skills[${index}]`, message: `信用评级必须在 ${min} 到 ${max} 之间` };
   }
   return null;
+}
+
+export function occupationPointTargetErrors(card) {
+  const errors = [];
+  const skills = Array.isArray(card?.skills) ? card.skills : [];
+  const listed = card?.occupation?.occupationalSkills;
+  if (!Array.isArray(listed)) return errors;
+  const allowed = new Set(listed.filter((name) => typeof name === "string").map((name) => name.trim()).filter(Boolean));
+  skills.forEach((skill, index) => {
+    const points = skill?.occupationPoints;
+    if (typeof points !== "number" || !Number.isInteger(points) || points <= 0) return;
+    const rawName = typeof skill?.name === "string" ? skill.name.trim() : "";
+    if (canonicalSkillName(rawName) === "信用评级") return;
+    if (allowed.has(rawName)) return;
+    errors.push({
+      path: `skills[${index}].occupationPoints`,
+      index,
+      message: "非本职技能不能分配职业点",
+    });
+  });
+  return errors;
 }
 
 export function pointBuyUsage(characteristics, options = {}) {
@@ -290,7 +334,8 @@ function creditView(draft) {
   const max = draft?.occupation?.creditMax;
   const error = creditRatingError(draft);
   const skills = Array.isArray(draft?.skills) ? draft.skills : [];
-  const skill = skills.find((item) => canonicalSkillName(typeof item?.name === "string" ? item.name : "") === "信用评级");
+  const matches = skills.filter((item) => canonicalSkillName(typeof item?.name === "string" ? item.name : "") === "信用评级");
+  const skill = matches.length === 1 ? matches[0] : null;
   let rating = null;
   if (skill && ["base", "growth", "occupationPoints", "interestPoints"].every((key) => integerOrNull(skill?.[key]) !== null)) {
     const result = safe("信用评级", () => skillRating(skill));
@@ -367,6 +412,7 @@ export function derivePreview(draft, options = {}) {
       interestPoints.remaining = remainingInterestPoints(total, skills);
     }
   }
+  const placementByIndex = new Map(occupationPointTargetErrors(draft).map((error) => [error.index, error.message]));
   const preview = {
     hp: hp?.ok ? hp.value : null,
     majorWound: hp?.ok ? safe("重伤", () => majorWoundThreshold(hp.value)).value ?? null : null,
@@ -381,7 +427,11 @@ export function derivePreview(draft, options = {}) {
     occupationPoints,
     interestPoints,
     age: age !== null && age >= 0 ? ageBandNote(age) : null,
-    skills: skills.map((skill) => skillView(skill, characteristics)),
+    skills: skills.map((skill, index) => {
+      const view = skillView(skill, characteristics);
+      view.occupationPointError = placementByIndex.get(index) ?? null;
+      return view;
+    }),
     skillBaseErrors: skillBaseErrors(draft),
     credit: creditView(draft),
   };

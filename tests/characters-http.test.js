@@ -103,7 +103,10 @@ function validBody(name = "奈洛莉") {
       creditMax: 70,
       occupationalSkills: ["会计"],
     },
-    skills: [{ name: "会计", base: 5, growth: 0, occupationPoints: 1, interestPoints: 0 }],
+    skills: [
+      { name: "会计", base: 5, growth: 0, occupationPoints: 1, interestPoints: 0 },
+      { name: "信用评级", specialty: "", base: 0, growth: 30, occupationPoints: 0, interestPoints: 0 },
+    ],
     identity: {
       name,
       age: 28,
@@ -240,14 +243,24 @@ test("creating a card ignores the client id and owner and stores the submitted s
     assert.equal(stored.occupation.id, "accountant");
     assert.equal(stored.occupation.name, "会计师");
     assert.deepEqual(stored.occupation.occupationalSkills, ["会计"]);
-    assert.deepEqual(stored.skills, [{
-      name: "会计",
-      specialty: "",
-      base: 5,
-      growth: 0,
-      occupationPoints: 1,
-      interestPoints: 0,
-    }]);
+    assert.deepEqual(stored.skills, [
+      {
+        name: "会计",
+        specialty: "",
+        base: 5,
+        growth: 0,
+        occupationPoints: 1,
+        interestPoints: 0,
+      },
+      {
+        name: "信用评级",
+        specialty: "",
+        base: 0,
+        growth: 30,
+        occupationPoints: 0,
+        interestPoints: 0,
+      },
+    ]);
     assert.deepEqual(stored.weapons, []);
     assert.equal(stored.armor, null);
     assert.deepEqual(stored.possessions, { items: [] });
@@ -323,7 +336,7 @@ test("editing persists, and an illegal field does not change the stored card", a
     assert.equal(stored.character.id, "card-1");
     assert.equal(stored.character.occupation.name, "会计师");
     assert.equal(stored.character.occupation.pointFormula, "EDU_X4");
-    assert.equal(stored.character.skills.length, 2);
+    assert.equal(stored.character.skills.length, 3);
     assert.equal(stored.createdAt, before.createdAt);
 
     const again = openDatabase({ DATABASE_PATH: dbPath });

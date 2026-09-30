@@ -8,7 +8,7 @@ import {
   isOccupationPointFormula,
 } from "./characterSchema.js";
 import { mythosPointError } from "./coc7.js";
-import { creditRatingError, pointPoolErrors } from "./sheet.js";
+import { creditRatingError, occupationPointTargetErrors, pointPoolErrors } from "./sheet.js";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -194,6 +194,7 @@ export function validateCharacter(card) {
   }
 
   for (const error of pointPoolErrors(card)) fail(error.path, error.message);
+  for (const error of occupationPointTargetErrors(card)) fail(error.path, error.message);
   const credit = creditRatingError(card);
   if (credit) fail(credit.path, credit.message);
 

@@ -183,6 +183,27 @@ if (form) {
     return [...form.querySelectorAll("[data-occupational-skill]")].map((input) => input.value.trim()).filter(Boolean);
   }
 
+  function isCreditName(name) {
+    return canonicalSkillName(name) === "信用评级";
+  }
+
+  function occupationSelectedInForm() {
+    const id = form.querySelector("[data-occupation='id']")?.value.trim() ?? "";
+    return id !== "" && id !== "unset";
+  }
+
+  function creditRows() {
+    return [...form.querySelectorAll(".skill-row")].filter((row) => isCreditName(fieldValue(row, "name")));
+  }
+
+  function ensureCreditRow() {
+    if (!occupationSelectedInForm() || creditRows().length > 0) return false;
+    const row = ensureSkillRow("信用评级");
+    const base = row.querySelector("[data-field='base']");
+    if (base && base.value.trim() === "") base.value = "0";
+    return true;
+  }
+
   function isMythosName(name) {
     return canonicalSkillName(name) === "克苏鲁神话";
   }
@@ -204,12 +225,16 @@ if (form) {
   function applyPointControls() {
     for (const row of form.querySelectorAll(".skill-row")) {
       const mythos = row.dataset.mythos === "true";
+      const occupational = row.dataset.occupational === "true";
+      const illegalOccupation = row.dataset.illegalOccupation === "true";
+      const showOccupation = !mythos && (illegalOccupation || (occupational && (mixPoints || skillView === "occupation")));
+      const showInterest = !mythos && (mixPoints || skillView === "interest");
       setStepper(row.querySelector('[data-pool="occupationPoints"]'), {
-        hidden: mythos || !(mixPoints || skillView === "occupation"),
+        hidden: !showOccupation,
         disabled: mythos,
       });
       setStepper(row.querySelector('[data-pool="interestPoints"]'), {
-        hidden: mythos || !(mixPoints || skillView === "interest"),
+        hidden: !showInterest,
         disabled: mythos,
       });
       setStepper(row.querySelector('[data-pool="growth"]'), {
@@ -221,12 +246,18 @@ if (form) {
 
   function applySkillView() {
     const names = new Set(occupationalNames());
+    const lockCredit = occupationSelectedInForm() && creditRows().length <= 1;
     for (const row of form.querySelectorAll(".skill-row")) {
       const name = fieldValue(row, "name").trim();
       const specialty = fieldValue(row, "specialty").trim();
-      const occupational = names.has(name) || name === "信用评级";
+      const creditName = isCreditName(name);
+      const occupational = names.has(name) || creditName;
+      const points = fieldValue(row, "occupationPoints").trim();
       row.dataset.occupational = occupational ? "true" : "false";
+      row.dataset.illegalOccupation = !occupational && /^\d+$/.test(points) && Number(points) > 0 ? "true" : "false";
       row.hidden = skillView === "occupation" ? !occupational : false;
+      const remove = row.querySelector("[data-remove-skill]");
+      if (remove) remove.hidden = creditName && lockCredit;
       const title = row.querySelector(".skill-title");
       if (title) title.textContent = specialty ? `${name} - ${specialty}` : name;
       const specialtyInput = row.querySelector("[data-field='specialty']");
@@ -313,6 +344,11 @@ if (form) {
       poolMessages.push(`兴趣点超过总额，已用 ${interestPool.spent} / ${interestPool.total}`);
     }
     if (derived?.credit?.error) poolMessages.push(derived.credit.error);
+    for (const skill of derived?.skills || []) {
+      if (skill?.occupationPointError && !poolMessages.includes(skill.occupationPointError)) {
+        poolMessages.push(skill.occupationPointError);
+      }
+    }
     const pointErrors = document.querySelector("#point-errors");
     if (pointErrors) pointErrors.textContent = poolMessages.join("\n");
     document.querySelector("#point-status")?.classList.toggle("point-status-error", poolMessages.length > 0);
@@ -359,7 +395,7 @@ if (form) {
       if (mythos) mythos.textContent = skill.mythosError || "";
       const creditLine = row.querySelector("[data-credit-range]");
       const credit = derived?.credit;
-      const creditName = fieldValue(row, "name").trim() === "信用评级";
+      const creditName = isCreditName(fieldValue(row, "name"));
       if (creditLine) {
         if (creditName && Number.isInteger(credit?.min) && Number.isInteger(credit?.max)) {
           creditLine.hidden = false;
@@ -370,11 +406,20 @@ if (form) {
         }
       }
       const rowError = row.querySelector("[data-row-error]");
-      if (rowError && creditName) {
-        if (credit?.error) rowError.textContent = credit.error;
-        else if (rowError.textContent.startsWith("信用评级必须在")) rowError.textContent = "";
+      if (rowError) {
+        if (skill.occupationPointError) rowError.textContent = skill.occupationPointError;
+        else if (creditName && credit?.error) rowError.textContent = credit.error;
+        else if (
+          rowError.textContent === "非本职技能不能分配职业点"
+          || rowError.textContent.startsWith("信用评级必须在")
+          || rowError.textContent === "选定职业后必须有一条信用评级"
+          || rowError.textContent === "信用评级只能有一条"
+        ) {
+          rowError.textContent = "";
+        }
       }
     });
+    if (derived?.credit?.error === "选定职业后必须有一条信用评级" && ensureCreditRow()) schedulePreview();
     applySkillView();
     const illegalPoints = markPointErrors();
     saveBlocked = poolMessages.length > 0 || illegalPoints;
@@ -685,8 +730,12 @@ if (form) {
     if (button.dataset.removeSkill != null) {
       const row = button.closest(".skill-row");
       const name = row ? fieldValue(row, "name").trim() : "";
-      row?.remove();
-      if (name) removeOccupationalChipIfUnused(name);
+      const locked = Boolean(row) && isCreditName(name) && occupationSelectedInForm() && creditRows().length <= 1;
+      if (!locked) {
+        row?.remove();
+        if (name) removeOccupationalChipIfUnused(name);
+        ensureCreditRow();
+      }
     }
     if (button.dataset.removeRow != null) button.closest("tr, .occupational-row")?.remove();
     if (button.dataset.removeSkill != null || button.dataset.removeRow != null) {
@@ -916,5 +965,7 @@ if (form) {
     });
   });
 
+  ensureCreditRow();
+  applySkillView();
   refreshPreview().catch(() => {});
 }

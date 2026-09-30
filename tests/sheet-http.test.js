@@ -7,7 +7,7 @@ import { readAuthConfig } from "../auth/config.js";
 import { createWebSession } from "../auth/store.js";
 import { handleRequest } from "../server.js";
 import { getCharacter, openDatabase } from "../storage/index.js";
-import { minimalCharacter } from "./minimalCharacter.js";
+import { minimalCharacter, setCredit } from "./minimalCharacter.js";
 
 const NOW = new Date("2026-05-01T00:00:00.000Z");
 const USER_A = "80351110224678912";
@@ -320,7 +320,7 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(fresh.body, /id="show-growth"/);
     assert.match(fresh.body, /id="choose-skill"/);
     assert.match(fresh.body, /id="skill-picker"/);
-    assert.match(fresh.body, /技能上限：职业 99 兴趣 99/);
+    assert.equal(fresh.body.includes("技能上限：职业 99 兴趣 99"), false);
     assert.match(fresh.body, /data-skill-view="occupation"/);
     assert.match(fresh.body, /data-skill-view="interest"/);
     const mythos = fresh.body.match(/<article class="skill-row"[^>]*data-mythos="true"[\s\S]*?<\/article>/);
@@ -496,6 +496,7 @@ test("CUSTOM can be saved without a guessed total, and age text does not change 
       creditMax: 40,
       occupationalSkills: ["聆听", "心理学"],
     };
+    custom.skills.find((skill) => skill.name === "会计").occupationPoints = 0;
     const saved = await call(db, { method: "POST", url: "/api/characters", cookie, body: custom });
     assert.equal(saved.statusCode, 201);
     const body = json(saved);
@@ -593,6 +594,7 @@ test("initialSan stays on the card, and catalog weapon fields round-trip", async
       creditMax: 30,
       occupationalSkills: ["聆听"],
     };
+    custom.skills.find((skill) => skill.name === "会计").occupationPoints = 0;
     const savedCustom = await call(db, { method: "POST", url: "/api/characters", cookie, body: custom });
     assert.equal(savedCustom.statusCode, 201);
     assert.equal(json(savedCustom).occupation.pointFormula, "CUSTOM");
@@ -657,9 +659,17 @@ test("skill points, growth, and the current occupational list survive the page",
     assert.match(accounting, /data-pool="growth" hidden/);
     assert.match(accounting, /data-field="growth"[^>]*value="7"/);
     assert.match(accounting, /成功率：72%/);
+    const creditArticle = skillArticle(page.body, "信用评级");
+    assert.ok(creditArticle);
+    assert.match(creditArticle, /data-remove-skill hidden/);
+    const dodge = skillArticle(page.body, "闪避");
+    assert.ok(dodge);
+    assert.match(dodge, /data-pool="occupationPoints" hidden/);
+    assert.match(dodge, /data-pool="interestPoints" hidden/);
 
     const listed = fullBody();
     listed.occupation.occupationalSkills = ["图书馆使用"];
+    listed.skills[0].occupationPoints = 0;
     listed.skills.push({ name: "图书馆使用", specialty: "", base: 20, growth: 0, occupationPoints: 0, interestPoints: 0 });
     const chosen = await call(db, { method: "POST", url: "/api/characters", cookie, body: listed });
     assert.equal(chosen.statusCode, 201, chosen.body);
@@ -683,7 +693,7 @@ test("skill points, growth, and the current occupational list survive the page",
     assert.match(JSON.stringify(json(blockedInterest).errors), /兴趣点超过总额/);
 
     const lowCredit = fullBody();
-    lowCredit.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 });
+    setCredit(lowCredit, { occupationPoints: 0 });
     const blockedCredit = await call(db, { method: "POST", url: "/api/characters", cookie, body: lowCredit });
     assert.equal(blockedCredit.statusCode, 400);
     assert.match(JSON.stringify(json(blockedCredit).errors), /信用评级必须在 30 到 70 之间/);
@@ -708,7 +718,7 @@ test("old phobia and mania text share one field, and credit uses that occupation
     delete body.background.personalHistory;
     body.occupation.creditMin = 9;
     body.occupation.creditMax = 30;
-    body.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 24, interestPoints: 0 });
+    setCredit(body, { occupationPoints: 24 });
     const saved = await call(db, { method: "POST", url: "/api/characters", cookie, body });
     assert.equal(saved.statusCode, 201, saved.body);
     const stored = getCharacter(db, json(saved).id).character;
@@ -725,7 +735,7 @@ test("old phobia and mania text share one field, and credit uses that occupation
       const sample = fullBody();
       sample.occupation.creditMin = 9;
       sample.occupation.creditMax = 30;
-      sample.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: points, interestPoints: 0 });
+      setCredit(sample, { occupationPoints: points });
       const response = await call(db, { method: "POST", url: "/api/characters", cookie, body: sample });
       assert.equal(response.statusCode, status, `${points} ${response.body}`);
       if (status === 400) assert.match(JSON.stringify(json(response).errors), /信用评级必须在 9 到 30 之间/);
@@ -734,9 +744,55 @@ test("old phobia and mania text share one field, and credit uses that occupation
     const wider = fullBody();
     wider.occupation.creditMin = 5;
     wider.occupation.creditMax = 75;
-    wider.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 31, interestPoints: 0 });
+    setCredit(wider, { occupationPoints: 31 });
     const allowed = await call(db, { method: "POST", url: "/api/characters", cookie, body: wider });
     assert.equal(allowed.statusCode, 201, allowed.body);
     assert.equal(json(allowed).derived.skills.find((skill) => skill.name === "信用评级").rating.regular, 31);
+  });
+});
+
+function importBody(card) {
+  const body = structuredClone(card);
+  body.schemaVersion = 1;
+  body.ruleset = "coc7";
+  delete body.currentHp;
+  delete body.id;
+  return body;
+}
+
+test("saving and importing reject a missing credit rating, a duplicate, and occupation points off the occupational list", async () => {
+  await withDb(async (db) => {
+    const cookie = sessionFor(db);
+    const before = await countCards(db, cookie);
+
+    const missing = fullBody();
+    missing.skills = missing.skills.filter((skill) => skill.name !== "信用评级");
+    const missingSave = await call(db, { method: "POST", url: "/api/characters", cookie, body: missing });
+    assert.equal(missingSave.statusCode, 400);
+    assert.match(JSON.stringify(json(missingSave).errors), /选定职业后必须有一条信用评级/);
+
+    const duplicate = fullBody();
+    duplicate.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 30, interestPoints: 0 });
+    const duplicateSave = await call(db, { method: "POST", url: "/api/characters", cookie, body: duplicate });
+    assert.equal(duplicateSave.statusCode, 400);
+    assert.match(JSON.stringify(json(duplicateSave).errors), /信用评级只能有一条/);
+
+    const stray = fullBody();
+    stray.skills.push({ name: "聆听", specialty: "", base: 20, growth: 0, occupationPoints: 4, interestPoints: 0 });
+    const straySave = await call(db, { method: "POST", url: "/api/characters", cookie, body: stray });
+    assert.equal(straySave.statusCode, 400);
+    assert.match(JSON.stringify(json(straySave).errors), /非本职技能不能分配职业点/);
+
+    const importedStray = importBody(stray);
+    const strayImport = await call(db, { method: "POST", url: "/api/characters/import", cookie, body: importedStray });
+    assert.equal(strayImport.statusCode, 400);
+    assert.match(JSON.stringify(json(strayImport).errors), /非本职技能不能分配职业点/);
+
+    const importedMissing = importBody(missing);
+    const missingImport = await call(db, { method: "POST", url: "/api/characters/import", cookie, body: importedMissing });
+    assert.equal(missingImport.statusCode, 400);
+    assert.match(JSON.stringify(json(missingImport).errors), /选定职业后必须有一条信用评级/);
+
+    assert.equal(await countCards(db, cookie), before);
   });
 });

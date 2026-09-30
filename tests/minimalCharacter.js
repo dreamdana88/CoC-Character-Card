@@ -1,3 +1,20 @@
+export function setCredit(card, fields = {}) {
+  let skill = card.skills.find((item) => item?.name === "信用评级");
+  if (!skill) {
+    skill = { name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 };
+    card.skills.push(skill);
+  }
+  Object.assign(skill, {
+    name: "信用评级",
+    specialty: "",
+    base: 0,
+    growth: 0,
+    occupationPoints: 0,
+    interestPoints: 0,
+  }, fields);
+  return skill;
+}
+
 export function minimalCharacter() {
   return {
     schemaVersion: 1,
@@ -45,6 +62,15 @@ export function minimalCharacter() {
         specialty: "",
         base: 0,
         growth: 0,
+        occupationPoints: 0,
+        interestPoints: 0,
+      },
+      {
+        name: "信用评级",
+        specialty: "",
+        base: 0,
+        // 30 落在会计师 30–70 内，且不占用职业点或兴趣点。
+        growth: 30,
         occupationPoints: 0,
         interestPoints: 0,
       },

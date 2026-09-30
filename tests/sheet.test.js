@@ -17,7 +17,7 @@ import {
   skillBaseErrors,
   starterSkills,
 } from "../rules/sheet.js";
-import { minimalCharacter } from "./minimalCharacter.js";
+import { minimalCharacter, setCredit } from "./minimalCharacter.js";
 
 test("derived values come from the existing rule functions", () => {
   const card = minimalCharacter();
@@ -285,23 +285,34 @@ test("skill pools, credit range, and final rating use the existing rules", () =>
 
   assert.equal(creditRatingError(minimalCharacter()), null);
   const credit = minimalCharacter();
-  credit.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 29, interestPoints: 0 });
+  const creditSkill = setCredit(credit, { occupationPoints: 29 });
   assert.match(creditRatingError(credit).message, /信用评级必须在 30 到 70 之间/);
   assert.equal(derivePreview(credit).credit.rating, 29);
   assert.equal(derivePreview(credit).credit.error, creditRatingError(credit).message);
-  credit.skills.at(-1).occupationPoints = 30;
+  creditSkill.occupationPoints = 30;
   assert.equal(creditRatingError(credit), null);
-  credit.skills.at(-1).occupationPoints = 70;
+  creditSkill.occupationPoints = 70;
   assert.equal(creditRatingError(credit), null);
-  credit.skills.at(-1).interestPoints = 1;
-  assert.equal(derivePreview(credit).credit.rating, skillRating(credit.skills.at(-1)).regular);
+  creditSkill.interestPoints = 1;
+  assert.equal(derivePreview(credit).credit.rating, skillRating(creditSkill).regular);
   assert.match(creditRatingError(credit).message, /30 到 70/);
+
+  const missing = minimalCharacter();
+  missing.skills = missing.skills.filter((skill) => skill.name !== "信用评级");
+  assert.equal(creditRatingError(missing).message, "选定职业后必须有一条信用评级");
+  assert.equal(derivePreview(missing).credit.error, "选定职业后必须有一条信用评级");
+
+  const stray = minimalCharacter();
+  stray.skills.push({ name: "聆听", specialty: "", base: 20, growth: 0, occupationPoints: 4, interestPoints: 0 });
+  assert.equal(derivePreview(stray).skills.at(-1).occupationPointError, "非本职技能不能分配职业点");
 });
 
 test("mix and growth toggles only change the skill page controls", () => {
   const editor = readFileSync(new URL("../web/editor.js", import.meta.url), "utf8");
   const controls = editor.slice(editor.indexOf("function applyPointControls"), editor.indexOf("function applySkillView"));
   assert.equal(controls.includes(".value"), false);
+  assert.match(controls, /dataset\.occupational === "true"/);
+  assert.match(controls, /dataset\.illegalOccupation === "true"/);
   assert.match(editor, /mixPoints = event\.currentTarget\.checked;\s*applyPointControls\(\);/);
   assert.match(editor, /showGrowth = event\.currentTarget\.checked;\s*applyPointControls\(\);/);
   const step = editor.slice(editor.indexOf("function stepPoint"), editor.indexOf("function optionValues"));

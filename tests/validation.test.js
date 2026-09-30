@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateCharacter } from "../rules/validation.js";
-import { minimalCharacter } from "./minimalCharacter.js";
+import { minimalCharacter, setCredit } from "./minimalCharacter.js";
 
 function messages(result) {
   return result.errors.map((error) => `${error.path}: ${error.message}`).join("\n");
@@ -119,6 +119,7 @@ test("custom occupation may exist but cannot list more than eight skills", () =>
   assert.match(messages(validateCharacter(card)), /最多 8 个本职技能/);
 
   card.occupation.occupationalSkills = ["一", "二"];
+  card.skills[0].occupationPoints = 0;
   assert.equal(validateCharacter(card).ok, true);
 });
 
@@ -147,40 +148,81 @@ test("overspent pools and an out-of-range credit rating cannot be saved", () => 
   assert.equal(validateCharacter(custom).ok, true);
 
   const low = minimalCharacter();
-  low.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 });
+  setCredit(low, { occupationPoints: 0 });
   assert.match(messages(validateCharacter(low)), /信用评级必须在 30 到 70 之间/);
 
   const high = minimalCharacter();
-  high.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 71, interestPoints: 0 });
+  setCredit(high, { occupationPoints: 71 });
   assert.match(messages(validateCharacter(high)), /信用评级必须在 30 到 70 之间/);
 
   const edge = minimalCharacter();
-  edge.skills.push({ name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 70, interestPoints: 0 });
+  setCredit(edge, { occupationPoints: 70 });
   assert.equal(validateCharacter(edge).ok, true);
+});
+
+test("occupation points only go to occupational skills and credit rating", () => {
+  const stray = minimalCharacter();
+  stray.skills.push({ name: "聆听", specialty: "", base: 20, growth: 0, occupationPoints: 5, interestPoints: 0 });
+  const strayResult = validateCharacter(stray);
+  assert.equal(strayResult.ok, false);
+  assert.match(messages(strayResult), /skills\[\d+\]\.occupationPoints: 非本职技能不能分配职业点/);
+
+  const interestOnly = minimalCharacter();
+  interestOnly.skills.push({ name: "聆听", specialty: "", base: 20, growth: 0, occupationPoints: 0, interestPoints: 5 });
+  assert.equal(validateCharacter(interestOnly).ok, true);
+
+  const listed = minimalCharacter();
+  listed.occupation.occupationalSkills = ["会计", "聆听"];
+  listed.skills.push({ name: "聆听", specialty: "", base: 20, growth: 0, occupationPoints: 5, interestPoints: 3 });
+  assert.equal(validateCharacter(listed).ok, true);
+
+  const creditPoints = minimalCharacter();
+  setCredit(creditPoints, { occupationPoints: 40 });
+  assert.equal(validateCharacter(creditPoints).ok, true);
+});
+
+test("a selected occupation needs exactly one credit rating", () => {
+  const missing = minimalCharacter();
+  missing.skills = missing.skills.filter((skill) => skill.name !== "信用评级");
+  assert.match(messages(validateCharacter(missing)), /选定职业后必须有一条信用评级/);
+
+  const duplicate = minimalCharacter();
+  duplicate.skills.push({ name: "信用评级", specialty: "另一条", base: 0, growth: 0, occupationPoints: 30, interestPoints: 0 });
+  assert.match(messages(validateCharacter(duplicate)), /信用评级只能有一条/);
+
+  const decorated = minimalCharacter();
+  decorated.skills.push({ name: "信用评级：", specialty: "", base: 0, growth: 0, occupationPoints: 30, interestPoints: 0 });
+  assert.match(messages(validateCharacter(decorated)), /信用评级只能有一条/);
+
+  const unset = minimalCharacter();
+  unset.occupation.id = "unset";
+  unset.occupation.creditMin = 0;
+  unset.occupation.creditMax = 0;
+  unset.skills = unset.skills.filter((skill) => skill.name !== "信用评级");
+  assert.equal(validateCharacter(unset).ok, true);
 });
 
 test("credit rating follows the selected occupation range", () => {
   const card = minimalCharacter();
   card.occupation.creditMin = 9;
   card.occupation.creditMax = 30;
-  const credit = { name: "信用评级", specialty: "", base: 0, growth: 0, occupationPoints: 0, interestPoints: 0 };
   for (const [points, ok] of [[8, false], [9, true], [24, true], [30, true], [31, false]]) {
     const sample = structuredClone(card);
-    sample.skills.push({ ...credit, occupationPoints: points });
+    setCredit(sample, { occupationPoints: points });
     const result = validateCharacter(sample);
     assert.equal(result.ok, ok, String(points));
     if (!ok) assert.match(messages(result), /信用评级必须在 9 到 30 之间/);
   }
 
   const summed = structuredClone(card);
-  summed.skills.push({ ...credit, occupationPoints: 20, interestPoints: 10, growth: 1 });
-  assert.equal(summed.skills.at(-1).base + 20 + 10 + 1, 31);
+  setCredit(summed, { occupationPoints: 20, interestPoints: 10, growth: 1 });
+  assert.equal(summed.skills.find((skill) => skill.name === "信用评级").base + 20 + 10 + 1, 31);
   assert.match(messages(validateCharacter(summed)), /信用评级必须在 9 到 30 之间/);
 
   const wider = structuredClone(card);
   wider.occupation.creditMin = 5;
   wider.occupation.creditMax = 75;
-  wider.skills.push({ ...credit, occupationPoints: 31 });
+  setCredit(wider, { occupationPoints: 31 });
   assert.equal(validateCharacter(wider).ok, true);
 });
 
