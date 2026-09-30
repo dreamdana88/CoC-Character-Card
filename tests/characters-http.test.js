@@ -131,7 +131,7 @@ function validBody(name = "奈洛莉") {
 }
 
 test("character sources do not embed the bot token or production guild", () => {
-  for (const file of ["api/characters.js", "web/pages.js", "web/editor.js", "web/site.css", "server.js"]) {
+  for (const file of ["api/characters.js", "web/pages.js", "web/editor.js", "web/gear.js", "web/gear-ui.js", "web/gear.css", "web/card-actions.js", "web/investigator-list.js", "web/site.css", "server.js"]) {
     const source = readFileSync(join(root, file), "utf8");
     assert.equal(source.includes("1447978053665030280"), false, file);
     assert.equal(source.includes("Bot "), false, file);
@@ -170,7 +170,7 @@ test("guests cannot open character pages or the character API", async () => {
     assert.match(home.body, /href="\/auth\/login"/);
     const css = await call(db, { url: "/site.css" });
     assert.equal(css.statusCode, 200);
-    assert.match(css.body, /max-width:\s*40rem/);
+    assert.match(css.body, /max-width:\s*1280px/);
   });
 });
 
@@ -275,13 +275,16 @@ test("creating a card ignores the client id and owner and stores the submitted s
     const form = await call(db, { url: `/investigators/${body.id}/edit`, cookie });
     assert.equal(form.statusCode, 200);
     assert.match(form.body, /编辑调查员/);
-    assert.match(form.body, /力量 STR/);
+    assert.match(form.body, />力量</);
     assert.equal(form.body.includes("玩家显示名"), false);
     assert.equal(form.body.includes('name="ownerDiscordUserId"'), false);
-    assert.equal(form.body.includes("<img"), false);
+    assert.equal(form.body.includes("<img src=x onerror=alert(1)>"), false);
     assert.match(form.body, /&lt;img src=x onerror=alert\(1\)&gt;/);
     assert.match(form.body, /\/\^-\?\\d\+\$\//);
-    assert.match(form.body, /删除这张调查员卡？此操作不能撤销。/);
+    assert.match(form.body, /src="\/card-actions.js"/);
+    const actions = await call(db, { url: "/card-actions.js" });
+    assert.equal(actions.statusCode, 200);
+    assert.match(actions.body, /删除这张调查员卡？此操作不能撤销。/);
 
     const saved = await call(db, { url: `/investigators/${body.id}/edit?saved=1`, cookie });
     assert.match(saved.body, /已保存/);
@@ -516,8 +519,12 @@ test("coc7.json export downloads the stored card and import creates a new card f
     assert.match(list.body, new RegExp(`/api/characters/${originalId}/export`));
     assert.match(list.body, />导出</);
     const edit = await call(db, { url: `/investigators/${originalId}/edit`, cookie: cookieA });
-    assert.match(edit.body, new RegExp(`/api/characters/${originalId}/export`));
-    assert.match(edit.body, /删除这张调查员卡？此操作不能撤销。/);
+    assert.equal(edit.body.includes('id="export-card"'), false);
+    assert.equal(edit.body.includes('id="record-actions"'), false);
+    assert.match(edit.body, /src="\/card-actions.js"/);
+    const actions = await call(db, { url: "/card-actions.js" });
+    assert.equal(actions.statusCode, 200);
+    assert.match(actions.body, /删除这张调查员卡？此操作不能撤销。/);
     assert.match(edit.body, /\/\^-\?\\d\+\$\//);
     const fresh = await call(db, { url: "/investigators/new", cookie: cookieA });
     assert.equal(/\/api\/characters\/[^"]+\/export/.test(fresh.body), false);

@@ -42,7 +42,9 @@ test("Phase B0 skeleton stays runnable", () => {
   for (const dir of ["web", "api", "tests"]) {
     assert.equal(statSync(join(root, dir)).isDirectory(), true, dir);
   }
-  assert.deepEqual(readdirSync(join(root, "web")).sort(), ["editor.js", "pages.js", "site.css"]);
+  assert.deepEqual(readdirSync(join(root, "web")).sort(), [
+    "asset-review.css", "asset-review.html", "assets", "card-actions.js", "editor-state.js", "editor.js", "gear-ui.js", "gear.css", "gear.js", "html.js", "investigator-list-client.js", "investigator-list.css", "investigator-list.js", "login.css", "login.js", "pages.js", "site.css", "skill-ui.js", "skills.css", "static-assets.js",
+  ]);
   assert.deepEqual(readdirSync(join(root, "api")).sort(), ["characters.js"]);
   assert.equal(statSync(join(root, "server.js")).isFile(), true);
   assert.deepEqual(readdirSync(join(root, "storage")).sort(), [

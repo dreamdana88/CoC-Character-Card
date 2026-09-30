@@ -1,0 +1,50 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "scrollWidth": 1440,
+      "badImages": 0,
+      "tabsRetainInput": "PASS",
+      "viewOnlyStaysSaved": "PASS",
+      "rollAdoptionDirty": "PASS",
+      "pointBuyOverspendAndEnd": "PASS"
+    },
+    {
+      "width": 1280,
+      "scrollWidth": 1280,
+      "badImages": 0,
+      "tabsRetainInput": "PASS",
+      "viewOnlyStaysSaved": "PASS",
+      "rollAdoptionDirty": "PASS",
+      "pointBuyOverspendAndEnd": "PASS"
+    },
+    {
+      "width": 390,
+      "scrollWidth": 390,
+      "badImages": 0,
+      "tabsRetainInput": "PASS",
+      "viewOnlyStaysSaved": "PASS",
+      "rollAdoptionDirty": "PASS",
+      "pointBuyOverspendAndEnd": "PASS"
+    },
+    {
+      "width": 320,
+      "scrollWidth": 320,
+      "badImages": 0,
+      "tabsRetainInput": "PASS",
+      "viewOnlyStaysSaved": "PASS",
+      "rollAdoptionDirty": "PASS",
+      "pointBuyOverspendAndEnd": "PASS"
+    }
+  ],
+  "saveAndDatabase": "PASS",
+  "saveKeepsTab": "PASS",
+  "typingDuringSave": "PASS",
+  "serverAndNetworkFailureRetainsInput": "PASS",
+  "expiredSessionFeedback": "PASS",
+  "invalidValueRejected": "PASS",
+  "leaveCancelAndBeforeUnload": "PASS",
+  "newThenUpdate": "PASS",
+  "errors": [],
+  "environment": "Edge headless; isolated temporary SQLite and simulated session. No real OAuth."
+}

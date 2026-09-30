@@ -65,6 +65,7 @@ function validateSkill(skill, index, fail) {
     fail(path, "技能必须是对象");
     return;
   }
+  if (Object.hasOwn(skill, "interestSelected") && typeof skill.interestSelected !== "boolean") fail(`${path}.interestSelected`, "兴趣选择必须是布尔值");
   rejectForbidden(skill, path, fail);
   requireString(skill, path, "name", fail, { allowEmpty: false });
   if (Object.hasOwn(skill, "specialty") && typeof skill.specialty !== "string") {
@@ -151,7 +152,7 @@ export function validateCharacter(card) {
 
   const background = requireObject(card.background, "background", fail);
   if (background) {
-    for (const key of BACKGROUND_FIELDS) requireString(background, "background", key, fail);
+    for (const key of BACKGROUND_FIELDS) if (!["assets", "mythos", "companions"].includes(key) || Object.hasOwn(background, key)) requireString(background, "background", key, fail);
   }
 
   if (!Array.isArray(card.weapons)) fail("weapons", "武器必须是数组");

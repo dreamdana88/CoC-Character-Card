@@ -1,0 +1,51 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "scrollWidth": 1440,
+      "badImages": 0,
+      "searchAndViewOnly": "PASS",
+      "duplicateOccupationById": "PASS",
+      "keyboardAndEscape": "PASS",
+      "mixGrowthMythos": "PASS",
+      "poolOverspendAndErrorLocation": "PASS"
+    },
+    {
+      "width": 1280,
+      "scrollWidth": 1280,
+      "badImages": 0,
+      "searchAndViewOnly": "PASS",
+      "duplicateOccupationById": "PASS",
+      "keyboardAndEscape": "PASS",
+      "mixGrowthMythos": "PASS",
+      "poolOverspendAndErrorLocation": "PASS"
+    },
+    {
+      "width": 390,
+      "scrollWidth": 390,
+      "badImages": 0,
+      "searchAndViewOnly": "PASS",
+      "duplicateOccupationById": "PASS",
+      "keyboardAndEscape": "PASS",
+      "mixGrowthMythos": "PASS",
+      "poolOverspendAndErrorLocation": "PASS"
+    },
+    {
+      "width": 320,
+      "scrollWidth": 320,
+      "badImages": 0,
+      "searchAndViewOnly": "PASS",
+      "duplicateOccupationById": "PASS",
+      "keyboardAndEscape": "PASS",
+      "mixGrowthMythos": "PASS",
+      "poolOverspendAndErrorLocation": "PASS"
+    }
+  ],
+  "actualSaveOfMixedPointsAndGrowth": "PASS",
+  "specialtyBaseUpdatesAndSave": "PASS",
+  "creditRangeAndLocate": "PASS",
+  "nonoccupationAndNonintegerRejection": "PASS",
+  "customOccupationAndCustomSkill": "PASS",
+  "errors": [],
+  "environment": "Edge headless, isolated temporary SQLite and simulated session. Real OAuth not tested."
+}

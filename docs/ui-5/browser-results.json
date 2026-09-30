@@ -1,0 +1,59 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "storyMetrics": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "badImages": 0
+      },
+      "longTextAndTabs": "PASS",
+      "catalogSearchAndEmpty": "PASS",
+      "multipleWeaponsAndCollapsedFields": "PASS",
+      "customWeaponArmorItemsSpells": "PASS",
+      "removalAndSave": "PASS"
+    },
+    {
+      "width": 1280,
+      "storyMetrics": {
+        "width": 1280,
+        "scrollWidth": 1280,
+        "badImages": 0
+      },
+      "longTextAndTabs": "PASS",
+      "catalogSearchAndEmpty": "PASS",
+      "multipleWeaponsAndCollapsedFields": "PASS",
+      "customWeaponArmorItemsSpells": "PASS",
+      "removalAndSave": "PASS"
+    },
+    {
+      "width": 390,
+      "storyMetrics": {
+        "width": 390,
+        "scrollWidth": 390,
+        "badImages": 0
+      },
+      "longTextAndTabs": "PASS",
+      "catalogSearchAndEmpty": "PASS",
+      "multipleWeaponsAndCollapsedFields": "PASS",
+      "customWeaponArmorItemsSpells": "PASS",
+      "removalAndSave": "PASS"
+    },
+    {
+      "width": 320,
+      "storyMetrics": {
+        "width": 320,
+        "scrollWidth": 320,
+        "badImages": 0
+      },
+      "longTextAndTabs": "PASS",
+      "catalogSearchAndEmpty": "PASS",
+      "multipleWeaponsAndCollapsedFields": "PASS",
+      "customWeaponArmorItemsSpells": "PASS",
+      "removalAndSave": "PASS"
+    }
+  ],
+  "exportDownloadImportUpload": "PASS",
+  "errors": [],
+  "environment": "Edge headless with temporary SQLite and simulated session; real OAuth not tested."
+}

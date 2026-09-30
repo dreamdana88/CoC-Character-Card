@@ -4,6 +4,8 @@ CoC 7 角色卡中心。当前做到 Phase B6：登录后可以填写、保存�
 
 ## 规则
 
+UI 已完成登录页与调查员档案列表（UI-1/UI-2），编辑骨架与属性（UI-3）、职业与技能（UI-4）、背景与装备（UI-5）已交付，等待统一修改与视觉验收。设计计划见 `docs/ui-construction-plan.md`，列表验收见 `docs/ui-2/acceptance.md`。登录后访问 `/investigators`；独立素材试装页为 `/ui/asset-review`。
+
 字段和公式以本仓库里的两份审计为准：
 
 ```text

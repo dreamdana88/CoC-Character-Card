@@ -1,0 +1,52 @@
+[
+  {
+    "name": "这是一位拥有非常长姓名的调查员用于窄屏排版检查",
+    "height": 348,
+    "footerBottomGap": 22,
+    "ornament": "/assets/archive-botanical-edge.webp",
+    "imageWidth": 92,
+    "imageHeight": 174,
+    "naturalWidth": 257,
+    "naturalHeight": 800
+  },
+  {
+    "name": "白露",
+    "height": 348,
+    "footerBottomGap": 22,
+    "ornament": "/assets/card-side-flowers.webp",
+    "imageWidth": 92,
+    "imageHeight": 174,
+    "naturalWidth": 254,
+    "naturalHeight": 800
+  },
+  {
+    "name": "鹤归",
+    "height": 348,
+    "footerBottomGap": 22,
+    "ornament": "/assets/card-side-documents.webp",
+    "imageWidth": 92,
+    "imageHeight": 174,
+    "naturalWidth": 331,
+    "naturalHeight": 800
+  },
+  {
+    "name": "沈瑾言",
+    "height": 348,
+    "footerBottomGap": 22,
+    "ornament": "/assets/card-side-books.webp",
+    "imageWidth": 92,
+    "imageHeight": 174,
+    "naturalWidth": 345,
+    "naturalHeight": 800
+  },
+  {
+    "name": "江晦",
+    "height": 348,
+    "footerBottomGap": 22,
+    "ornament": "/assets/card-side-black-rose.webp",
+    "imageWidth": 92,
+    "imageHeight": 174,
+    "naturalWidth": 420,
+    "naturalHeight": 800
+  }
+]

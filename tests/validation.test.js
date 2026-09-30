@@ -235,3 +235,16 @@ test("credit limits are not silently swapped", () => {
   assert.equal(card.occupation.creditMin, 70);
   assert.match(messages(result), /下限不能高于上限/);
 });
+
+
+test("selected zero-point interests and extended investigator notes are validated", () => {
+  const card = minimalCharacter();
+  card.skills[0].interestSelected = true;
+  Object.assign(card.background, { assets: "旧书店", mythos: "调查线索", companions: "同行记者" });
+  assert.equal(validateCharacter(card).ok, true);
+  card.skills[0].interestSelected = "yes";
+  assert.match(messages(validateCharacter(card)), /interestSelected/);
+  card.skills[0].interestSelected = true;
+  card.background.assets = 125;
+  assert.match(messages(validateCharacter(card)), /background.assets/);
+});

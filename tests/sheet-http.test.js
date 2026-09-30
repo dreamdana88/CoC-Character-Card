@@ -181,14 +181,14 @@ test("a full sheet can be saved, reread, copied, and deleted", async () => {
     assert.match(page.body, /手杖/);
     assert.match(page.body, /支配术/);
     assert.match(page.body, /1D6\+DB/);
-    assert.match(page.body, /生命值：11/);
+    assert.match(page.body, /<dt>生命值<\/dt><dd>11<\/dd>/);
     assert.match(page.body, /id="initialSan"/);
     assert.equal(page.body.includes('id="sanity"'), false);
     assert.equal(page.body.includes("理智：50"), false);
-    assert.match(page.body, /职业点：320 \/ 已用 40 \/ 剩余 280/);
-    assert.match(page.body, /兴趣点：150 \/ 已用 0 \/ 剩余 150/);
-    assert.match(page.body, /成功率：45%/);
-    assert.match(page.body, /困难 22 \/ 极难 9/);
+    assert.match(page.body, /data-point-pool="occupationPoints"[\s\S]*?40 \/ 320[\s\S]*?剩余 280/);
+    assert.match(page.body, /data-point-pool="interestPoints"[\s\S]*?0 \/ 150[\s\S]*?剩余 150/);
+    assert.match(page.body, /成功率 45% · 困难 22 · 极难 9/);
+    assert.match(page.body, /title="普通 \/ 困难 \/ 极难"/);
     assert.match(page.body, /会计/);
     assert.equal(page.body.includes('name="ownerDiscordUserId"'), false);
 
@@ -276,7 +276,7 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(json(rejected).message, /1 到 20/);
 
     const fresh = await call(db, { url: "/investigators/new", cookie });
-    assert.match(fresh.body, /角色简介/);
+    assert.match(fresh.body, /基本资料/);
     assert.match(fresh.body, /基础属性/);
     assert.match(fresh.body, /职业&amp;技能/);
     assert.match(fresh.body, /背景故事/);
@@ -297,14 +297,14 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(fresh.body, /图书馆使用/);
     assert.match(fresh.body, /闪避/);
     assert.match(fresh.body, /不能从属性算出职业点/);
-    assert.match(fresh.body, /id="occupation-choice"/);
+    assert.match(fresh.body, /id="occupation-picker"/);
     assert.match(fresh.body, /id="initialSan"/);
     assert.match(fresh.body, /0 到 99 的整数/);
     assert.match(fresh.body, /0 到 90 的整数/);
     assert.match(fresh.body, />会计师</);
     assert.match(fresh.body, />自定义职业</);
-    assert.match(fresh.body, /id="weapon-choice"/);
-    assert.match(fresh.body, /加入所选武器/);
+    assert.match(fresh.body, /id="weapon-catalog-dialog"/);
+    assert.match(fresh.body, /data-add-catalog-weapon="0"/);
     assert.match(fresh.body, />手里剑</);
     assert.match(fresh.body, />黄铜指虎</);
     assert.equal(fresh.body.includes("受伤程度"), false);
@@ -314,7 +314,7 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.equal(fresh.body.includes("伤害等级"), false);
     assert.match(fresh.body, /人类学/);
     assert.match(fresh.body, /恐惧症\/狂躁症/);
-    assert.match(fresh.body, /个人经历说明/);
+    assert.match(fresh.body, /调查员经历/);
     assert.equal(fresh.body.includes("躁狂症"), false);
     assert.match(fresh.body, /id="mix-points"/);
     assert.match(fresh.body, /id="show-growth"/);
@@ -658,7 +658,7 @@ test("skill points, growth, and the current occupational list survive the page",
     assert.match(accounting, /data-field="interestPoints"[^>]*value="20"/);
     assert.match(accounting, /data-pool="growth" hidden/);
     assert.match(accounting, /data-field="growth"[^>]*value="7"/);
-    assert.match(accounting, /成功率：72%/);
+    assert.match(accounting, /成功率 72% · 困难 36 · 极难 14/);
     const creditArticle = skillArticle(page.body, "信用评级");
     assert.ok(creditArticle);
     assert.match(creditArticle, /data-remove-skill hidden/);
@@ -676,8 +676,8 @@ test("skill points, growth, and the current occupational list survive the page",
     const chosenPage = await call(db, { url: `/investigators/${json(chosen).id}/edit`, cookie });
     const library = skillArticle(chosenPage.body, "图书馆使用");
     const oldAccounting = skillArticle(chosenPage.body, "会计");
-    assert.match(library, /^<article class="skill-row" data-occupational="true"/);
-    assert.match(oldAccounting, /^<article class="skill-row" data-occupational="false"[^>]*hidden>/);
+    assert.match(library, /^<article class="skill-row"[^>]*data-occupational="true"/);
+    assert.match(oldAccounting, /^<article class="skill-row"[^>]*data-occupational="false"[^>]*hidden>/);
 
     const countBeforeRejects = await countCards(db, cookie);
     const overOccupation = fullBody();
@@ -727,7 +727,7 @@ test("old phobia and mania text share one field, and credit uses that occupation
     assert.equal(Object.hasOwn(stored.background, "manias"), false);
     const page = await call(db, { url: `/investigators/${json(saved).id}/edit`, cookie });
     assert.match(page.body, /恐惧症\/狂躁症/);
-    assert.match(page.body, /个人经历说明/);
+    assert.match(page.body, /调查员经历/);
     assert.match(page.body, /蜘蛛\n收集骨头/);
     assert.match(page.body, /信用评级（9～30）/);
 

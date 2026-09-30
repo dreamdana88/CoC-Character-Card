@@ -94,6 +94,7 @@ function readSkill(skill) {
     interestPoints: skill.interestPoints,
   };
   out.specialty = Object.hasOwn(skill, "specialty") ? skill.specialty : "";
+  if (Object.hasOwn(skill, "interestSelected")) out.interestSelected = skill.interestSelected;
   if (Object.hasOwn(skill, "key")) out.key = skill.key;
   return out;
 }
@@ -217,6 +218,7 @@ function presentSkill(skill) {
     occupationPoints: skill?.occupationPoints,
     interestPoints: skill?.interestPoints,
   };
+  if (skill && Object.hasOwn(skill, "interestSelected")) out.interestSelected = skill.interestSelected;
   if (skill && Object.hasOwn(skill, "key")) out.key = skill.key;
   return out;
 }

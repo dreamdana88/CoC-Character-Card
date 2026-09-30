@@ -1,55 +1,3 @@
-document.getElementById("logout")?.addEventListener("click", async () => {
-  await fetch("/auth/logout", { method: "POST" });
-  location.href = "/";
-});
-
-document.querySelectorAll("[data-delete]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (!confirm("删除这张调查员卡？此操作不能撤销。")) return;
-    const response = await fetch("/api/characters/" + encodeURIComponent(button.dataset.delete), { method: "DELETE" });
-    if (response.ok) location.href = "/investigators";
-    else alert("删除失败");
-  });
-});
-
-document.querySelectorAll("[data-duplicate]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const response = await fetch("/api/characters/" + encodeURIComponent(button.dataset.duplicate) + "/duplicate", { method: "POST" });
-    const body = await response.json().catch(() => ({}));
-    if (response.ok && body.id) location.href = "/investigators/" + encodeURIComponent(body.id) + "/edit?copied=1";
-    else alert("复制失败");
-  });
-});
-
-document.getElementById("import-card")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const errors = document.getElementById("import-errors");
-  const file = event.currentTarget.querySelector("input[type=file]")?.files?.[0];
-  if (!file) {
-    if (errors) errors.textContent = "请选择一个 .coc7.json 文件";
-    return;
-  }
-  let payload;
-  try {
-    payload = JSON.parse(await file.text());
-  } catch {
-    if (errors) errors.textContent = "文件不是 JSON";
-    return;
-  }
-  const response = await fetch("/api/characters/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (response.ok && body.id) {
-    location.href = "/investigators/" + encodeURIComponent(body.id) + "/edit";
-    return;
-  }
-  const details = Array.isArray(body.errors) ? body.errors.map((error) => error.message).filter(Boolean).join("\n") : "";
-  if (errors) errors.textContent = details || body.message || "导入失败";
-});
-
 function integerOrRaw(value) {
   return /^-?\d+$/.test(value) ? Number(value) : value;
 }
@@ -112,6 +60,7 @@ if (form) {
         growth: integerOrRaw(fieldValue(row, "growth")),
         occupationPoints: integerOrRaw(fieldValue(row, "occupationPoints")),
         interestPoints: integerOrRaw(fieldValue(row, "interestPoints")),
+        ...(row.dataset.interestSelected === "true" ? { interestSelected: true } : {}),
       })),
       background: {},
       weapons: [...form.querySelectorAll(".weapon-row")].filter((row) => filledRow(row, WEAPON_ROW_FIELDS)).map((row) => {
@@ -130,14 +79,8 @@ if (form) {
         if (quantity !== "") weapon.quantity = integerOrRaw(quantity);
         return weapon;
       }),
-      possessions: {
-        items: [...form.querySelectorAll(".item-row")]
-          .filter((row) => fieldValue(row, "name").trim() !== "")
-          .map((row) => ({ name: fieldValue(row, "name") })),
-      },
-      spells: [...form.querySelectorAll(".spell-row")]
-        .filter((row) => fieldValue(row, "name").trim() !== "")
-        .map((row) => ({ name: fieldValue(row, "name") })),
+      possessions: { items: form.querySelector("#carried-items").value.trim() ? [{ name: form.querySelector("#carried-items").value }] : [] },
+      spells: form.querySelector("#extra-spells").value.trim() ? [{ name: form.querySelector("#extra-spells").value }] : [],
     };
     for (const field of form.querySelectorAll("[data-section]")) {
       const value = field.dataset.integer === "true" ? integerOrRaw(field.value) : field.value;
@@ -162,6 +105,10 @@ if (form) {
     if (pointBuy) data.pointBuy = { total: pointBuy.total, includeLuck: pointBuy.includeLuck };
     return data;
   }
+
+  const editorState = createEditorState(form);
+  let previewVersion = 0;
+  function showPreviewError(error) { document.getElementById("preview-error").textContent = error.message; }
 
   function specialtyList(name) {
     const canonical = canonicalSkillName(name);
@@ -212,10 +159,6 @@ if (form) {
     return `${name.trim()}\n${specialty.trim()}`;
   }
 
-  function poolStatus(label, pool) {
-    return `${label}：${pool.total} / 已用 ${textOrDash(pool.spent)} / 剩余 ${textOrDash(pool.remaining)}`;
-  }
-
   function setStepper(stepper, { hidden, disabled }) {
     if (!stepper) return;
     stepper.hidden = hidden;
@@ -245,6 +188,8 @@ if (form) {
   }
 
   function applySkillView() {
+    const query = document.getElementById("sheet-skill-search").value.trim().toLocaleLowerCase("zh-CN");
+    let visibleCount = 0;
     const names = new Set(occupationalNames());
     const lockCredit = occupationSelectedInForm() && creditRows().length <= 1;
     for (const row of form.querySelectorAll(".skill-row")) {
@@ -255,18 +200,30 @@ if (form) {
       const points = fieldValue(row, "occupationPoints").trim();
       row.dataset.occupational = occupational ? "true" : "false";
       row.dataset.illegalOccupation = !occupational && /^\d+$/.test(points) && Number(points) > 0 ? "true" : "false";
-      row.hidden = skillView === "occupation" ? !occupational : false;
+      const matches = (name + " " + specialty).toLocaleLowerCase("zh-CN").includes(query);
+      const interest = row.dataset.interestSelected === "true" || Number(fieldValue(row, "interestPoints")) > 0 || (!occupational && Number(fieldValue(row, "growth")) > 0);
+      row.hidden = !matches || (skillView === "occupation" ? !occupational && row.dataset.illegalOccupation !== "true" : !interest && row.dataset.illegalOccupation !== "true");
+      if (!row.hidden) visibleCount++;
       const remove = row.querySelector("[data-remove-skill]");
-      if (remove) remove.hidden = creditName && lockCredit;
+      if (remove) remove.hidden = skillView === "occupation" || !interest;
+      row.querySelector('[data-field="name"]').readOnly = occupational;
       const title = row.querySelector(".skill-title");
       if (title) title.textContent = specialty ? `${name} - ${specialty}` : name;
       const specialtyInput = row.querySelector("[data-field='specialty']");
-      if (specialtyInput) {
-        const list = specialtyList(name);
-        if (list) specialtyInput.setAttribute("list", list);
-        else specialtyInput.removeAttribute("list");
+      const list = specialtyList(name);
+      if (list && specialtyInput.tagName !== "SELECT") {
+        const select = document.createElement("select"); select.dataset.field = "specialty"; select.setAttribute("aria-label", name + "专攻");
+        const values = optionValues(list); if (specialty && !values.includes(specialty)) values.unshift(specialty);
+        const blank = document.createElement("option"); blank.value = ""; blank.textContent = "选择具体" + name; select.append(blank);
+        for (const value of values) { const option = document.createElement("option"); option.value = value; option.textContent = value; select.append(option); }
+        select.value = specialty; specialtyInput.replaceWith(select);
       }
+
     }
+    document.getElementById("sheet-skill-count").textContent = "显示 " + visibleCount + " 项技能";
+    document.getElementById("skill-empty").hidden = visibleCount !== 0;
+    const catalogOccupation = occupations.find(item => item.id === form.querySelector('[data-occupation="id"]').value);
+    document.getElementById("choose-skill").hidden = skillView === "occupation" && Boolean(catalogOccupation) && catalogOccupation.pointFormula !== "CUSTOM" && !/任选|任意|选择|两项/.test(catalogOccupation.skillText || "");
     applyPointControls();
   }
 
@@ -287,8 +244,9 @@ if (form) {
   function setSkillView(next) {
     skillView = next === "interest" ? "interest" : "occupation";
     for (const button of document.querySelectorAll("[data-skill-view]")) {
-      button.setAttribute("aria-selected", button.dataset.skillView === skillView ? "true" : "false");
+      button.setAttribute("aria-pressed", button.dataset.skillView === skillView ? "true" : "false");
     }
+    document.getElementById("choose-skill").textContent = skillView === "occupation" ? "＋ 选择任选技能" : "＋ 选择兴趣技能";
     applySkillView();
   }
 
@@ -303,12 +261,12 @@ if (form) {
         ["生命值", derived?.hp],
         ["重伤线", derived?.majorWound],
         ["魔力", derived?.mp],
-        ["SAN上限", derived?.sanMaximum],
-        ["移动", derived?.mov],
+        ["理智上限", derived?.sanMaximum],
+        ["移动力", derived?.mov],
         ["体格", derived?.build],
         ["伤害加值", derived?.damageBonus],
       ];
-      stats.textContent = rows.map(([label, value]) => `${label}：${textOrDash(value)}`).join("\n");
+      stats.replaceChildren(...rows.map(([label, value]) => { const item = document.createElement('div'); const dt = document.createElement('dt'); const dd = document.createElement('dd'); dt.textContent = label; dd.textContent = textOrDash(value); item.append(dt, dd); return item; }));
     }
     const ageNote = document.querySelector("#age-note");
     if (ageNote) {
@@ -325,17 +283,13 @@ if (form) {
         `职业名：${form.querySelector("[data-occupation='name']").value.trim() || "未填写"}`,
         `职业点公式：${formulaLabel}`,
         `信用评级：${form.querySelector("[data-occupation='creditMin']").value}–${form.querySelector("[data-occupation='creditMax']").value}`,
-        `本职技能：${occupational.join("、") || "未填写"}`,
+
       ].join("\n");
     }
     const occupationPool = derived?.occupationPoints;
     const interestPool = derived?.interestPoints;
-    const poolLines = [];
-    if (occupationPool?.message) poolLines.push(occupationPool.message);
-    else if (occupationPool?.total != null) poolLines.push(poolStatus("职业点", occupationPool));
-    if (interestPool?.total != null) poolLines.push(poolStatus("兴趣点", interestPool));
-    const pools = document.querySelector("#point-pools");
-    if (pools) pools.textContent = poolLines.join("\n");
+    renderPointPool("occupationPoints", occupationPool);
+    renderPointPool("interestPoints", interestPool);
     const poolMessages = [];
     if (typeof occupationPool?.remaining === "number" && occupationPool.remaining < 0) {
       poolMessages.push(`职业点超过总额，已用 ${occupationPool.spent} / ${occupationPool.total}`);
@@ -350,10 +304,15 @@ if (form) {
       }
     }
     const pointErrors = document.querySelector("#point-errors");
-    if (pointErrors) pointErrors.textContent = poolMessages.join("\n");
+
     document.querySelector("#point-status")?.classList.toggle("point-status-error", poolMessages.length > 0);
     const status = document.querySelector("#point-buy-status");
     const endButton = document.querySelector("#end-point-buy");
+    document.getElementById("point-buy-panel").hidden = !pointBuy;
+    const progress = document.getElementById("point-buy-progress");
+    progress.max = pointBuy?.total || 1;
+    progress.value = Math.max(0, derived?.pointBuy?.used || 0);
+    document.getElementById("point-buy-panel").classList.toggle("point-status-error", Boolean(pointBuy && (!derived?.pointBuy?.ok || derived.pointBuy.remaining < 0)));
     if (status && endButton) {
       if (!pointBuy) {
         status.textContent = "";
@@ -363,7 +322,7 @@ if (form) {
         endButton.hidden = false;
       } else {
         const usage = derived.pointBuy;
-        status.textContent = `已用 ${usage.used} / ${usage.total}，剩余 ${usage.remaining}`;
+        status.textContent = `已用 ${usage.used} / ${usage.total}，剩余 ${usage.remaining}（${pointBuy.includeLuck ? "包含幸运" : "不含幸运"}）`;
         endButton.hidden = false;
       }
     }
@@ -388,9 +347,12 @@ if (form) {
       const rating = row.querySelector("[data-rating]");
       if (rating) {
         rating.textContent = skill.rating
-          ? `成功率：${skill.rating.regular}%  困难 ${skill.rating.hard} / 极难 ${skill.rating.extreme}`
-          : "";
+          ? `成功率 ${skill.rating.regular}% · 困难 ${skill.rating.hard} · 极难 ${skill.rating.extreme}`
+          : "—";
+        rating.setAttribute("aria-label", "普通 / 困难 / 极难：" + rating.textContent);
       }
+      const baseDisplay = row.querySelector("[data-base-display]");
+      if (baseDisplay) baseDisplay.textContent = base?.value || "—";
       const mythos = row.querySelector("[data-mythos]");
       if (mythos) mythos.textContent = skill.mythosError || "";
       const creditLine = row.querySelector("[data-credit-range]");
@@ -422,50 +384,38 @@ if (form) {
     if (derived?.credit?.error === "选定职业后必须有一条信用评级" && ensureCreditRow()) schedulePreview();
     applySkillView();
     const illegalPoints = markPointErrors();
-    saveBlocked = poolMessages.length > 0 || illegalPoints;
-    const submit = form.querySelector("button[type='submit']");
-    if (submit) submit.disabled = saveBlocked;
+    const messages = [...poolMessages];
+    for (const row of rows) { const message = row.querySelector('[data-row-error]').textContent.trim(); row.classList.toggle('skill-error', Boolean(message)); if (message && !messages.includes(message)) messages.push(message); }
+    pointErrors.replaceChildren(...messages.map(message => {
+      const li = document.createElement('li'); const text = document.createElement('span'); text.textContent = message;
+      const locate = document.createElement('button'); locate.type = 'button'; locate.textContent = '定位修改';
+      locate.addEventListener('click', () => { let row = rows.find(item => item.querySelector('[data-row-error]').textContent === message); if (!row && message.startsWith('职业点超过')) row = rows.find(item => Number(fieldValue(item,'occupationPoints')) > 0); if (!row && message.startsWith('兴趣点超过')) row = rows.find(item => Number(fieldValue(item,'interestPoints')) > 0); revealSkillError(form,row,setSkillView); });
+      li.append(text,locate); return li;
+    }));
+    document.getElementById('point-status').classList.toggle('point-status-error', messages.length > 0);
+    saveBlocked = messages.length > 0 || illegalPoints;
   }
 
   async function refreshPreview() {
+    editorState.update();
     syncSpecialtyLists();
-    const response = await fetch("/api/characters/preview", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(collect()),
-    });
-    if (!response.ok) return;
-    const body = await response.json().catch(() => ({}));
+    const version = ++previewVersion;
+    const snapshot = JSON.stringify(collect());
+    const response = await fetch("/api/characters/preview", { method: "POST", headers: { "content-type": "application/json" }, body: snapshot });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || "派生值预览失败（HTTP " + response.status + "）");
+    if (version !== previewVersion || snapshot !== JSON.stringify(collect())) return;
+    document.getElementById("preview-error").textContent = "";
     renderDerived(body.derived);
+    editorState.update();
   }
 
   function schedulePreview() {
+    editorState.update();
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
-      refreshPreview().catch(() => {});
+      refreshPreview().catch(showPreviewError);
     }, 200);
-  }
-
-  function appendRow(target, className, fields, removeAttribute) {
-    const row = document.createElement("tr");
-    row.className = className;
-    for (const field of fields) {
-      const cell = document.createElement("td");
-      const input = document.createElement("input");
-      input.dataset.field = field.name;
-      if (field.integer) input.dataset.integer = "true";
-      input.value = field.value ?? "";
-      cell.append(input);
-      row.append(cell);
-    }
-    const action = document.createElement("td");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset[removeAttribute] = "true";
-    button.textContent = "删除";
-    action.append(button);
-    row.append(action);
-    target.append(row);
   }
 
   function createStepper(label, field, value, { hidden = false, disabled = false } = {}) {
@@ -473,10 +423,11 @@ if (form) {
     wrap.className = "stepper";
     wrap.dataset.pool = field;
     wrap.hidden = hidden;
-    wrap.append(document.createTextNode(`${label} `));
+    const caption = document.createElement("span"); caption.textContent = label; wrap.append(caption);
     const minus = document.createElement("button");
     minus.type = "button";
-    minus.dataset.step = "-1";
+    minus.dataset.step = "-5";
+    minus.setAttribute("aria-label", "减少5点");
     minus.textContent = "-";
     minus.disabled = disabled;
     const input = document.createElement("input");
@@ -487,10 +438,11 @@ if (form) {
     input.disabled = disabled;
     const plus = document.createElement("button");
     plus.type = "button";
-    plus.dataset.step = "1";
+    plus.dataset.step = "5";
+    plus.setAttribute("aria-label", "增加5点");
     plus.textContent = "+";
     plus.disabled = disabled;
-    wrap.append(minus, input, plus);
+    const controls = document.createElement("span"); controls.className = "stepper-controls"; controls.append(minus,input,plus); wrap.append(controls);
     return wrap;
   }
 
@@ -500,8 +452,6 @@ if (form) {
     article.className = "skill-row";
     article.dataset.occupational = "false";
     article.dataset.mythos = mythos ? "true" : "false";
-    const header = document.createElement("header");
-    header.className = "skill-head";
     const nameInput = document.createElement("input");
     nameInput.dataset.field = "name";
     nameInput.setAttribute("list", "skill-names");
@@ -513,40 +463,35 @@ if (form) {
     remove.type = "button";
     remove.dataset.removeSkill = "true";
     remove.textContent = "删除";
-    header.append(nameInput, specialtyInput, remove);
+    nameInput.setAttribute("aria-label", "技能名"); specialtyInput.setAttribute("aria-label", "专攻");
     const title = document.createElement("p");
     title.className = "skill-title";
     const rating = document.createElement("p");
     rating.dataset.rating = "true";
+    rating.className = "skill-rating"; rating.title = "普通 / 困难 / 极难"; rating.tabIndex = 0;
     const credit = document.createElement("p");
     credit.dataset.creditRange = "true";
     credit.hidden = true;
     const mythosLine = document.createElement("p");
     mythosLine.dataset.mythos = "true";
-    const baseLine = document.createElement("label");
-    baseLine.className = "base-line";
-    baseLine.append(document.createTextNode("基础值 "));
     const baseInput = document.createElement("input");
     baseInput.dataset.field = "base";
     baseInput.dataset.integer = "true";
     baseInput.inputMode = "numeric";
     baseInput.value = base;
-    baseLine.append(baseInput);
     const error = document.createElement("p");
     error.className = "errors";
     error.dataset.rowError = "true";
-    article.append(
-      header,
-      title,
-      rating,
-      credit,
-      mythosLine,
-      baseLine,
-      createStepper("职业点", "occupationPoints", occupationPoints, { hidden: mythos, disabled: mythos }),
-      createStepper("兴趣点", "interestPoints", interestPoints, { hidden: true, disabled: mythos }),
-      createStepper("成长", "growth", growth, { hidden: true }),
-      error,
-    );
+    const overview = document.createElement('div'); overview.className = 'skill-summary';
+    const baseDisplay = document.createElement('span'); baseDisplay.className = 'skill-base'; baseDisplay.append('基础 ');
+    const baseNumber = document.createElement('b'); baseNumber.dataset.baseDisplay = ''; baseNumber.textContent = base || '—'; baseDisplay.append(baseNumber);
+    overview.append(title,baseDisplay,credit,mythosLine);
+    const points = document.createElement('div'); points.className = 'skill-points';
+    points.append(createStepper('职业点','occupationPoints',occupationPoints,{hidden:mythos,disabled:mythos}),createStepper('兴趣点','interestPoints',interestPoints,{hidden:true,disabled:mythos}),createStepper('成长','growth',growth,{hidden:true}));
+    const controls = document.createElement('div'); controls.className = 'skill-specialty';
+    nameInput.type = 'hidden'; specialtyInput.type = 'hidden'; baseInput.type = 'hidden';
+    controls.append(nameInput,specialtyInput,baseInput,remove);
+    article.append(overview,rating,points,controls,error);
     return article;
   }
 
@@ -557,7 +502,8 @@ if (form) {
     });
     if (existing) return existing;
     const row = createSkillArticle({ name, specialty });
-    document.querySelector("#skill-rows")?.append(row);
+    if (isCreditName(name)) document.querySelector("#skill-rows")?.prepend(row);
+    else document.querySelector("#skill-rows")?.append(row);
     return row;
   }
 
@@ -573,7 +519,7 @@ if (form) {
     const still = [...form.querySelectorAll(".skill-row")].some((row) => fieldValue(row, "name").trim() === name);
     if (still) return;
     for (const input of form.querySelectorAll("[data-occupational-skill]")) {
-      if (input.value.trim() === name) input.closest(".occupational-row")?.remove();
+      if (input.value.trim() === name) input.remove();
     }
   }
 
@@ -589,7 +535,7 @@ if (form) {
     const next = Number(input.value.trim()) + Number(button.dataset.step);
     input.value = String(next < 0 ? 0 : next);
     if (error) error.textContent = "";
-    refreshPreview().catch(() => {});
+    refreshPreview().catch(showPreviewError);
   }
 
   function optionValues(id) {
@@ -621,18 +567,7 @@ if (form) {
   }
 
   function occupationalSkillRow(name) {
-    const row = document.createElement("div");
-    row.className = "occupational-row";
-    const input = document.createElement("input");
-    input.dataset.occupationalSkill = "true";
-    input.setAttribute("list", "skill-names");
-    input.value = name;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.removeRow = "true";
-    button.textContent = "删除";
-    row.append(input, button);
-    return row;
+    const input = document.createElement("input"); input.type = "hidden"; input.dataset.occupationalSkill = "true"; input.value = name; return input;
   }
 
   function setOccupationalSkills(names) {
@@ -642,8 +577,7 @@ if (form) {
     for (const name of names) box.append(occupationalSkillRow(name));
   }
 
-  document.querySelector("#occupation-choice")?.addEventListener("change", () => {
-    const id = document.querySelector("#occupation-choice").value;
+  setupOccupationPicker((id) => {
     const found = occupations.find((item) => item.id === id);
     const text = document.querySelector("#occupation-skill-text");
     if (!found) {
@@ -660,64 +594,12 @@ if (form) {
     if (text) text.textContent = found.skillText || "";
     for (const name of names) ensureSkillRow(name);
     ensureSkillRow("信用评级");
+    document.getElementById("occupation-edit").open = found.pointFormula === "CUSTOM";
     applySkillView();
     schedulePreview();
   });
 
-  document.querySelector("#add-occupational-skill")?.addEventListener("click", () => {
-    document.querySelector("#occupational-skills")?.append(occupationalSkillRow(""));
-    schedulePreview();
-  });
-
-  function weaponRowFields(weapon = {}) {
-    return WEAPON_ROW_FIELDS.map((name) => ({
-      name,
-      integer: name === "quantity",
-      value: weapon[name] == null ? "" : String(weapon[name]),
-    }));
-  }
-
-  function fillWeaponChoices() {
-    const category = document.querySelector("#weapon-category")?.value ?? "";
-    const select = document.querySelector("#weapon-choice");
-    if (!select) return;
-    const previous = select.value;
-    select.replaceChildren();
-    const blank = document.createElement("option");
-    blank.value = "";
-    blank.textContent = "请选择";
-    select.append(blank);
-    weapons.forEach((weapon, index) => {
-      if (category && weapon.type !== category) return;
-      const option = document.createElement("option");
-      option.value = String(index);
-      option.textContent = weapon.name;
-      select.append(option);
-    });
-    if ([...select.options].some((option) => option.value === previous)) select.value = previous;
-  }
-
-  document.querySelector("#weapon-category")?.addEventListener("change", fillWeaponChoices);
-
-  document.querySelector("#add-catalog-weapon")?.addEventListener("click", () => {
-    const raw = document.querySelector("#weapon-choice")?.value ?? "";
-    if (!/^\d+$/.test(raw)) return;
-    const weapon = weapons[Number(raw)];
-    if (!weapon) return;
-    appendRow(document.querySelector("#weapon-rows"), "weapon-row", weaponRowFields(weapon), "removeRow");
-  });
-
-  document.querySelector("#add-weapon")?.addEventListener("click", () => {
-    appendRow(document.querySelector("#weapon-rows"), "weapon-row", weaponRowFields(), "removeRow");
-  });
-
-  document.querySelector("#add-item")?.addEventListener("click", () => {
-    appendRow(document.querySelector("#item-rows"), "item-row", [{ name: "name" }], "removeRow");
-  });
-
-  document.querySelector("#add-spell")?.addEventListener("click", () => {
-    appendRow(document.querySelector("#spell-rows"), "spell-row", [{ name: "name" }], "removeRow");
-  });
+  setupGear(form, weapons, schedulePreview);
 
   form.addEventListener("click", (event) => {
     const button = event.target.closest("button");
@@ -731,13 +613,16 @@ if (form) {
       const row = button.closest(".skill-row");
       const name = row ? fieldValue(row, "name").trim() : "";
       const locked = Boolean(row) && isCreditName(name) && occupationSelectedInForm() && creditRows().length <= 1;
-      if (!locked) {
-        row?.remove();
+      if (!locked && skillView === "interest") {
+        if (row?.dataset.occupational === "true") {
+          row.dataset.interestSelected = "false";
+          row.querySelector("[data-field=interestPoints]").value = "0";
+        } else row?.remove();
         if (name) removeOccupationalChipIfUnused(name);
         ensureCreditRow();
       }
     }
-    if (button.dataset.removeRow != null) button.closest("tr, .occupational-row")?.remove();
+    if (button.dataset.removeRow != null) button.closest(".occupational-row")?.remove();
     if (button.dataset.removeSkill != null || button.dataset.removeRow != null) {
       applySkillView();
       schedulePreview();
@@ -790,20 +675,25 @@ if (form) {
     const duplicate = [...form.querySelectorAll(".skill-row")].some((row) => {
       return skillIdentity(fieldValue(row, "name"), fieldValue(row, "specialty")) === key;
     });
-    if (duplicate) {
-      if (error) error.textContent = "这个技能已经在列表里";
+    if (duplicate && (skillView === "occupation" ? occupationalNames().includes(name) : [...form.querySelectorAll(".skill-row")].some(row => skillIdentity(fieldValue(row,"name"),fieldValue(row,"specialty")) === key && row.dataset.interestSelected === "true"))) {
+      if (error) error.textContent = "这个技能已经选入当前列表";
       return;
     }
     ensureSkillRow(name, specialty);
     if (skillView === "occupation" && name !== "信用评级") ensureOccupationalChip(name);
+    else ensureSkillRow(name, specialty).dataset.interestSelected = "true";
     if (isMythosName(name) && skillView === "occupation") setSkillView("interest");
     else applySkillView();
     document.querySelector("#skill-picker")?.close();
-    refreshPreview().catch(() => {});
+    refreshPreview().catch(showPreviewError);
   });
+
+  document.getElementById('sheet-skill-search').addEventListener('input',applySkillView);
+  document.getElementById('clear-skill-search').addEventListener('click',()=>{document.getElementById('sheet-skill-search').value='';applySkillView();});
 
   form.addEventListener("input", (event) => {
     const field = event.target;
+    if (["sheet-skill-search", "weapon-search", "weapon-category"].includes(field.id)) return;
     if (field.closest?.(".stepper")) {
       const error = field.closest(".skill-row")?.querySelector("[data-row-error]");
       if (error) error.textContent = /^\d+$/.test(field.value.trim()) ? "" : "点数必须是非负整数";
@@ -834,6 +724,7 @@ if (form) {
   document.querySelector("#start-rolls")?.addEventListener("click", async () => {
     const error = document.querySelector("#roll-error");
     const count = integerOrRaw(document.querySelector("#roll-count").value.trim());
+    try {
     const response = await fetch("/api/characteristics/rolls", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -857,9 +748,12 @@ if (form) {
       ["siz", "体型"],
       ["int", "智力"],
     ];
+    let planIndex = 0;
     for (const set of body.sets || []) {
       const box = document.createElement("section");
       box.className = "roll-set";
+      const title = document.createElement("h3");
+      title.textContent = "方案 " + String(++planIndex).padStart(2, "0");
       const text = document.createElement("p");
       const derived = set.derived || {};
       const luckLine = typeof set.luck === "number" ? `幸运：${set.luck}` : `幸运：${set.luckNote}`;
@@ -891,11 +785,12 @@ if (form) {
         }
         rollsDialog?.close();
         results.replaceChildren();
-        refreshPreview().catch(() => {});
+        refreshPreview().catch(showPreviewError);
       });
-      box.append(text, use);
+      box.append(title, text, use);
       results.append(box);
     }
+    } catch (failure) { error.textContent = "骰点失败：" + failure.message; }
   });
 
   const pointBuyDialog = document.querySelector("#point-buy-dialog");
@@ -918,54 +813,65 @@ if (form) {
       includeLuck: document.querySelector("#point-buy-luck").checked,
     };
     pointBuyDialog?.close();
-    refreshPreview().catch(() => {});
+    refreshPreview().catch(showPreviewError);
   });
   document.querySelector("#end-point-buy")?.addEventListener("click", () => {
     pointBuy = null;
-    refreshPreview().catch(() => {});
+    refreshPreview().catch(showPreviewError);
   });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const errors = document.querySelector("#errors");
+    if (editorState.saving) return;
+    const errors = document.getElementById("errors");
+    errors.textContent = "";
+    editorState.begin();
     try {
+      clearTimeout(previewTimer);
       await refreshPreview();
-    } catch {
-      errors.textContent = "派生值暂时算不出来";
-      return;
-    }
-    if (saveBlocked) {
-      const rowError = [...form.querySelectorAll("[data-row-error]")].map((item) => item.textContent.trim()).filter(Boolean).join("\n");
-      errors.textContent = [document.querySelector("#point-errors")?.textContent, rowError].filter(Boolean).join("\n") || "点数不合法，不能保存";
-      return;
-    }
-    const response = await fetch(form.dataset.url, {
-      method: form.dataset.method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(collect()),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const lines = Array.isArray(body.errors) ? body.errors.map((item) => item.path + "：" + item.message) : [];
-      errors.textContent = lines.join("\n") || body.message || "保存失败";
-      return;
-    }
-    location.href = "/investigators/" + encodeURIComponent(body.id) + "/edit?saved=1";
+      if (saveBlocked) throw new Error(document.getElementById("point-errors").textContent || "点数不合法，不能保存");
+      const snapshot = collect();
+      const response = await fetch(form.dataset.url, { method: form.dataset.method, headers: { "content-type": "application/json" }, body: JSON.stringify(snapshot) });
+      const body = await response.json();
+      if (!response.ok) { const lines = Array.isArray(body.errors) ? body.errors.map(item => item.path + "：" + item.message) : []; throw new Error(lines.join("\n") || body.message || "保存失败（HTTP " + response.status + "）"); }
+      if (!body.id) throw new Error("保存响应缺少角色编号，请刷新确认后再继续");
+      const creating = form.dataset.method === "POST";
+      form.dataset.url = "/api/characters/" + encodeURIComponent(body.id);
+      form.dataset.method = "PATCH";
+      document.getElementById("investigator-title").textContent = collect().identity.name.trim() || "未命名调查员";
+      document.getElementById("editor-description").textContent = "编辑调查员档案";
+      const stamp = document.querySelector(".identity-stamp");
+      stamp.textContent = Array.from(collect().identity.name.trim() || "档")[0];
+      editorState.success(snapshot);
+      if (creating) {
+        history.replaceState(null, "", "/investigators/" + encodeURIComponent(body.id) + "/edit");
+      }
+    } catch (error) { errors.textContent = error.message; editorState.failure(); errors.focus({ preventScroll: true }); errors.scrollIntoView({ block: "center", behavior: "smooth" }); }
   });
 
-  document.querySelectorAll("[data-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll("[data-tab]").forEach((item) => {
-        item.setAttribute("aria-selected", item === button ? "true" : "false");
-      });
-      document.querySelectorAll("[data-panel]").forEach((panel) => {
-        panel.hidden = panel.dataset.panel !== button.dataset.tab;
-      });
-      button.scrollIntoView({ inline: "nearest", block: "nearest" });
+  const tabs = [...document.querySelectorAll('[data-tab]')];
+  function selectSection(button) {
+    for (const item of tabs) { item.setAttribute('aria-selected', String(item === button)); item.tabIndex = item === button ? 0 : -1; }
+    for (const panel of document.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== button.dataset.tab;
+    button.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }
+  tabs.forEach((button, index) => {
+    button.addEventListener('click', () => selectSection(button));
+    button.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      else if (['ArrowRight','ArrowDown'].includes(event.key)) next = (index + 1) % tabs.length;
+      else if (['ArrowLeft','ArrowUp'].includes(event.key)) next = (index + tabs.length - 1) % tabs.length;
+      else return;
+      event.preventDefault(); selectSection(tabs[next]); tabs[next].focus();
     });
   });
+  const mobileTabs = matchMedia('(max-width:760px)');
+  function orientTabs() { document.querySelector('.dossier-tabs').setAttribute('aria-orientation',mobileTabs.matches ? 'horizontal' : 'vertical'); }
+  mobileTabs.addEventListener('change', orientTabs); orientTabs();
 
   ensureCreditRow();
   applySkillView();
-  refreshPreview().catch(() => {});
+  refreshPreview().catch(showPreviewError);
 }

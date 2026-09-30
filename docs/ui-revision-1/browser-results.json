@@ -1,0 +1,40 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "interestSelectionAndPersistence": "PASS",
+      "fixedOccupationalSkills": "PASS",
+      "singleTextRecordsAndDisclosure": "PASS",
+      "sexAndNonOverlappingBottomSave": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 1280,
+      "interestSelectionAndPersistence": "PASS",
+      "fixedOccupationalSkills": "PASS",
+      "singleTextRecordsAndDisclosure": "PASS",
+      "sexAndNonOverlappingBottomSave": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 390,
+      "interestSelectionAndPersistence": "PASS",
+      "fixedOccupationalSkills": "PASS",
+      "singleTextRecordsAndDisclosure": "PASS",
+      "sexAndNonOverlappingBottomSave": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 320,
+      "interestSelectionAndPersistence": "PASS",
+      "fixedOccupationalSkills": "PASS",
+      "singleTextRecordsAndDisclosure": "PASS",
+      "sexAndNonOverlappingBottomSave": "PASS",
+      "noOverflow": "PASS"
+    }
+  ],
+  "jsonRoundtrip": "PASS",
+  "newCardSave": "PASS",
+  "errors": [],
+  "environment": "Edge headless; temporary SQLite and simulated session, real OAuth not tested."
+}

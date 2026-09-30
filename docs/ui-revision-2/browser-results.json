@@ -1,0 +1,38 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "specialtyReselect": "PASS",
+      "ratingCalculation": "PASS",
+      "creditFirst": "PASS",
+      "singleSaveButton": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 1280,
+      "specialtyReselect": "PASS",
+      "ratingCalculation": "PASS",
+      "creditFirst": "PASS",
+      "singleSaveButton": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 390,
+      "specialtyReselect": "PASS",
+      "ratingCalculation": "PASS",
+      "creditFirst": "PASS",
+      "singleSaveButton": "PASS",
+      "noOverflow": "PASS"
+    },
+    {
+      "width": 320,
+      "specialtyReselect": "PASS",
+      "ratingCalculation": "PASS",
+      "creditFirst": "PASS",
+      "singleSaveButton": "PASS",
+      "noOverflow": "PASS"
+    }
+  ],
+  "errors": [],
+  "environment": "Temporary SQLite, simulated session, real Edge. Real OAuth not tested."
+}

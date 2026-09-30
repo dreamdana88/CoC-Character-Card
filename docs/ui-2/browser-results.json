@@ -1,0 +1,49 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "badImages": 0,
+      "search": "PASS",
+      "sort": "PASS",
+      "importDialog": "PASS"
+    },
+    {
+      "width": 1280,
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "badImages": 0,
+      "search": "PASS",
+      "sort": "PASS",
+      "importDialog": "PASS"
+    },
+    {
+      "width": 390,
+      "viewport": 390,
+      "scrollWidth": 390,
+      "badImages": 0,
+      "search": "PASS",
+      "sort": "PASS",
+      "importDialog": "PASS"
+    },
+    {
+      "width": 320,
+      "viewport": 320,
+      "scrollWidth": 320,
+      "badImages": 0,
+      "search": "PASS",
+      "sort": "PASS",
+      "importDialog": "PASS"
+    }
+  ],
+  "export": "PASS",
+  "invalidJson": "PASS",
+  "import": "PASS",
+  "duplicate": "PASS",
+  "deleteCancelAndConfirm": "PASS",
+  "logout": "PASS",
+  "emptyAndOwnerIsolation": "PASS",
+  "errors": [],
+  "environment": "Edge headless, temporary DB and simulated authenticated session; no real OAuth"
+}

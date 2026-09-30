@@ -32,6 +32,9 @@ export const BACKGROUND_FIELDS = Object.freeze([
   "scars",
   "phobias",
   "personalHistory",
+  "assets",
+  "mythos",
+  "companions",
 ]);
 
 export function readBackground(background) {
@@ -40,6 +43,7 @@ export function readBackground(background) {
   for (const key of BACKGROUND_FIELDS) {
     if (typeof source[key] === "string") out[key] = source[key];
   }
+  for (const key of ["assets", "mythos", "companions"]) if (Object.hasOwn(source, key)) out[key] = source[key];
   const phobia = typeof out.phobias === "string" ? out.phobias : "";
   const mania = typeof source.manias === "string" ? source.manias.trim() : "";
   if (mania) {
