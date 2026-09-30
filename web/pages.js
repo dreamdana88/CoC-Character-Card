@@ -6,11 +6,21 @@ import { SESSION_COOKIE } from "../auth/constants.js";
 import { AuthError, authStatus } from "../auth/errors.js";
 import { readCookie } from "../auth/http.js";
 import { readSession } from "../auth/store.js";
-import { CHARACTERISTIC_FIELDS, ERAS } from "../rules/characterSchema.js";
+import { BACKGROUND_FIELDS, CHARACTERISTIC_FIELDS, ERAS } from "../rules/characterSchema.js";
+import {
+  FIGHTING_SPECIALTY_BASES,
+  FIREARMS_SPECIALTY_BASES,
+  FORMULA_LABELS,
+  SKILL_NAMES,
+  derivePreview,
+  starterSkills,
+} from "../rules/sheet.js";
 import { getCharacter, listCharactersByOwner } from "../storage/index.js";
 import { StorageError } from "../storage/errors.js";
 
-const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "site.css"), "utf8");
+const webDir = dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(join(webDir, "site.css"), "utf8");
+const editorSource = readFileSync(join(webDir, "editor.js"), "utf8");
 
 const IDENTITY_LABELS = [
   ["name", "姓名", false],
@@ -34,6 +44,18 @@ const CHARACTERISTIC_LABELS = new Map([
   ["luck", "幸运 Luck"],
 ]);
 
+const BACKGROUND_LABELS = new Map([
+  ["appearance", "外貌描述"],
+  ["beliefs", "思想与信念"],
+  ["significantPeople", "重要之人"],
+  ["meaningfulLocations", "意义非凡之地"],
+  ["treasuredPossessions", "宝贵之物"],
+  ["traits", "特质"],
+  ["scars", "伤疤"],
+  ["phobias", "恐惧症"],
+  ["manias", "躁狂症"],
+]);
+
 const SESSION_FAILURES = new Set([
   "SESSION_MISSING",
   "SESSION_EXPIRED",
@@ -41,53 +63,14 @@ const SESSION_FAILURES = new Set([
   "ENTITLEMENT_EXPIRED",
 ]);
 
-const PAGE_SCRIPT = `
-document.getElementById("logout")?.addEventListener("click", async () => {
-  await fetch("/auth/logout", { method: "POST" });
-  location.href = "/";
-});
-document.querySelectorAll("[data-delete]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (!confirm("删除这张调查员卡？此操作不能撤销。")) return;
-    const response = await fetch("/api/characters/" + encodeURIComponent(button.dataset.delete), { method: "DELETE" });
-    if (response.ok) location.href = "/investigators";
-    else alert("删除失败");
-  });
-});
-document.querySelectorAll("[data-duplicate]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const response = await fetch("/api/characters/" + encodeURIComponent(button.dataset.duplicate) + "/duplicate", { method: "POST" });
-    const body = await response.json().catch(() => ({}));
-    if (response.ok && body.id) location.href = "/investigators/" + encodeURIComponent(body.id) + "/edit?copied=1";
-    else alert("复制失败");
-  });
-});
-const form = document.querySelector("#card-form");
-if (form) {
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = { identity: {}, characteristics: {} };
-    for (const field of form.querySelectorAll("[data-section]")) {
-      let value = field.value;
-      if (field.dataset.integer === "true") value = /^-?\\d+$/.test(value) ? Number(value) : value;
-      data[field.dataset.section][field.name] = value;
-    }
-    const response = await fetch(form.dataset.url, {
-      method: form.dataset.method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const body = await response.json().catch(() => ({}));
-    const errors = document.querySelector("#errors");
-    if (!response.ok) {
-      const lines = Array.isArray(body.errors) ? body.errors.map((item) => item.path + "：" + item.message) : [];
-      errors.textContent = lines.join("\\n") || body.message || "保存失败";
-      return;
-    }
-    location.href = "/investigators/" + encodeURIComponent(body.id) + "/edit?saved=1";
-  });
-}
-`;
+const EMPTY_OCCUPATION = {
+  id: "unset",
+  name: "",
+  pointFormula: "CUSTOM",
+  creditMin: 0,
+  creditMax: 0,
+  occupationalSkills: [],
+};
 
 function headerValue(headers, name) {
   if (!headers) return "";
@@ -172,7 +155,7 @@ function layout(title, main) {
 <main>
 ${main}
 </main>
-<script>${PAGE_SCRIPT}</script>
+<script>${editorSource}</script>
 </body>
 </html>`;
 }
@@ -224,11 +207,105 @@ function identityControl(key, label, integer, identity) {
   return `<label>${escapeHtml(label)}<input name="${escapeHtml(key)}" data-section="identity"${integerAttr} value="${escapeHtml(value)}"></label>`;
 }
 
+function optionList(id, values) {
+  const options = values.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("");
+  return `<datalist id="${id}">${options}</datalist>`;
+}
+
+function show(value) {
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+function derivedText(preview) {
+  return [
+    ["生命值", preview.hp],
+    ["重伤线", preview.majorWound],
+    ["魔力", preview.mp],
+    ["SAN上限", preview.sanMaximum],
+    ["移动", preview.mov],
+    ["体格", preview.build],
+    ["伤害加值", preview.damageBonus],
+  ].map(([label, value]) => `${label}：${show(value)}`).join("\n");
+}
+
+function occupationLine(preview) {
+  const pool = preview.occupationPoints;
+  if (pool?.message) return pool.message;
+  if (pool?.total != null) return `职业点总额 ${pool.total}，已用 ${show(pool.spent)}，剩余 ${show(pool.remaining)}`;
+  return "";
+}
+
+function pointPoolText(preview) {
+  const lines = [];
+  const occupation = occupationLine(preview);
+  if (occupation) lines.push(occupation);
+  const interest = preview.interestPoints;
+  if (interest?.total != null) {
+    lines.push(`兴趣点总额 ${interest.total}，已用 ${show(interest.spent)}，剩余 ${show(interest.remaining)}`);
+  }
+  return lines.join("\n");
+}
+
+function ageText(preview) {
+  const text = preview.age?.text || preview.age?.reason || "";
+  return text ? `年龄提示：${text}。属性保持手填的数值。` : "";
+}
+
+function formulaOptions(selected) {
+  return FORMULA_LABELS.map(([value, label]) => {
+    const isSelected = value === selected ? " selected" : "";
+    return `<option value="${escapeHtml(value)}"${isSelected}>${escapeHtml(label)}</option>`;
+  }).join("");
+}
+
+function skillRow(skill, view) {
+  const rating = view?.rating ? `${view.rating.regular} / ${view.rating.hard} / ${view.rating.extreme}` : "";
+  return `<tr class="skill-row">
+<td><input data-field="name" list="skill-names" value="${escapeHtml(skill?.name ?? "")}"></td>
+<td><input data-field="specialty" value="${escapeHtml(skill?.specialty ?? "")}"></td>
+<td><input data-field="base" data-integer="true" value="${escapeHtml(skill?.base ?? "")}"></td>
+<td><input data-field="growth" data-integer="true" value="${escapeHtml(skill?.growth ?? 0)}"></td>
+<td><input data-field="occupationPoints" data-integer="true" value="${escapeHtml(skill?.occupationPoints ?? 0)}"></td>
+<td><input data-field="interestPoints" data-integer="true" value="${escapeHtml(skill?.interestPoints ?? 0)}"></td>
+<td data-rating>${escapeHtml(rating)}</td>
+<td data-mythos>${escapeHtml(view?.mythosError ?? "")}</td>
+<td><button type="button" data-remove-skill>删除</button></td>
+</tr>`;
+}
+
+function weaponRow(weapon) {
+  return `<tr class="weapon-row">
+<td><input data-field="name" value="${escapeHtml(weapon?.name ?? "")}"></td>
+<td><input data-field="type" value="${escapeHtml(weapon?.type ?? "")}"></td>
+<td><input data-field="skill" value="${escapeHtml(weapon?.skill ?? "")}"></td>
+<td><input data-field="damage" value="${escapeHtml(weapon?.damage ?? "")}"></td>
+<td><input data-field="quantity" data-integer="true" value="${escapeHtml(weapon?.quantity ?? "")}"></td>
+<td><button type="button" data-remove-row>删除</button></td>
+</tr>`;
+}
+
+function namedRow(className, name) {
+  return `<tr class="${className}"><td><input data-field="name" value="${escapeHtml(name ?? "")}"></td><td><button type="button" data-remove-row>删除</button></td></tr>`;
+}
+
+function occupationalRow(name) {
+  return `<div class="occupational-row"><input data-occupational-skill list="skill-names" value="${escapeHtml(name)}"><button type="button" data-remove-row>删除</button></div>`;
+}
+
 function formPage({ mode, record, notice }) {
-  const identity = record?.character.identity ?? {};
-  const characteristics = record?.character.characteristics ?? {};
+  const card = record?.character;
+  const identity = card?.identity ?? {};
+  const characteristics = card?.characteristics ?? {};
+  const occupation = card?.occupation ?? EMPTY_OCCUPATION;
+  const skills = card?.skills ?? starterSkills();
+  const background = card?.background ?? {};
+  const weapons = card?.weapons ?? [];
+  const armor = card?.armor ?? null;
+  const possessions = card?.possessions ?? { items: [] };
+  const spells = card?.spells ?? [];
+  const preview = derivePreview({ identity, characteristics, occupation, skills, armor });
   const editing = mode === "edit";
-  const id = editing ? record.character.id : "";
+  const id = editing ? card.id : "";
   const action = editing ? `/api/characters/${encodeURIComponent(id)}` : "/api/characters";
   const method = editing ? "PATCH" : "POST";
   const noticeHtml = notice ? `<p class="notice">${escapeHtml(notice)}</p>` : "";
@@ -237,19 +314,125 @@ function formPage({ mode, record, notice }) {
     const value = Object.hasOwn(characteristics, key) ? characteristics[key] : "";
     return `<label>${escapeHtml(CHARACTERISTIC_LABELS.get(key))}<input name="${escapeHtml(key)}" data-section="characteristics" data-integer="true" inputmode="numeric" value="${escapeHtml(value)}"></label>`;
   }).join("");
+  const formulaLabel = FORMULA_LABELS.find(([value]) => value === occupation.pointFormula)?.[1] ?? "";
+  const occupationalNames = Array.isArray(occupation.occupationalSkills) ? occupation.occupationalSkills : [];
+  const summary = [
+    `职业名：${occupation.name?.trim() || "未填写"}`,
+    `职业点公式：${formulaLabel}`,
+    `信用评级：${show(occupation.creditMin)}–${show(occupation.creditMax)}`,
+    `本职技能：${occupationalNames.filter((name) => String(name).trim() !== "").join("、") || "未填写"}`,
+    occupationLine(preview),
+  ].filter(Boolean).join("\n");
+  const backgroundHtml = BACKGROUND_FIELDS.map((key) => {
+    const value = Object.hasOwn(background, key) ? background[key] : "";
+    return `<label>${escapeHtml(BACKGROUND_LABELS.get(key))}<textarea name="${escapeHtml(key)}" data-section="background">${escapeHtml(value)}</textarea></label>`;
+  }).join("");
+  const armorChecked = armor ? " checked" : "";
+  const armorHidden = armor ? "" : " hidden";
+  const movChecked = armor?.applyMovPenalty === true ? " checked" : "";
   const extra = editing
     ? `<div class="actions"><button type="button" data-duplicate="${escapeHtml(id)}">复制</button> <button type="button" data-delete="${escapeHtml(id)}">删除</button></div>`
     : "";
   return layout(editing ? "编辑调查员" : "新建调查员", `${noticeHtml}
 <h1>${editing ? "编辑调查员" : "新建调查员"}</h1>
 <form id="card-form" data-url="${escapeHtml(action)}" data-method="${method}">
-<h2>角色简介</h2>
+<div class="sheet-tabs" role="tablist">
+<button type="button" role="tab" id="tab-intro" data-tab="intro" aria-selected="true" aria-controls="panel-intro">角色简介</button>
+<button type="button" role="tab" id="tab-stats" data-tab="stats" aria-selected="false" aria-controls="panel-stats">基础属性</button>
+<button type="button" role="tab" id="tab-skills" data-tab="skills" aria-selected="false" aria-controls="panel-skills">职业&amp;技能</button>
+<button type="button" role="tab" id="tab-story" data-tab="story" aria-selected="false" aria-controls="panel-story">背景故事</button>
+<button type="button" role="tab" id="tab-gear" data-tab="gear" aria-selected="false" aria-controls="panel-gear">武器&amp;物品</button>
+</div>
+<section id="panel-intro" data-panel="intro" role="tabpanel" aria-labelledby="tab-intro">
 ${identityHtml}
-<h2>属性</h2>
+<p id="age-note">${escapeHtml(ageText(preview))}</p>
+</section>
+<section id="panel-stats" data-panel="stats" role="tabpanel" aria-labelledby="tab-stats" hidden>
+<div class="actions">
+<button type="button" id="open-rolls">天命</button>
+<button type="button" id="open-point-buy">购点</button>
+</div>
+<p id="point-buy-status"></p>
+<button type="button" id="end-point-buy" hidden>结束购点</button>
 <div class="characteristics">${statsHtml}</div>
+<label>理智<input id="sanity" data-integer="true" inputmode="numeric" value="${escapeHtml(card?.sanity ?? "")}"></label>
+<p>天命选定方案时，理智等于该方案的意志。手填和购点自行填写，不超过 99。</p>
+<p>天命按 3D6×5 掷幸运，并计入总值含运。幸运也可以手改。</p>
+<pre id="derived">${escapeHtml(derivedText(preview))}</pre>
+</section>
+<section id="panel-skills" data-panel="skills" role="tabpanel" aria-labelledby="tab-skills" hidden>
+<h2>职业</h2>
+<p>命名职业的完整本职表没有逐条进入审计。请选择已确认的点数公式，并填写信用范围和本职技能。自定义职业不能从属性算出职业点。</p>
+<label>职业编号<input data-occupation="id" value="${escapeHtml(occupation.id ?? "")}"></label>
+<label>职业名<input data-occupation="name" value="${escapeHtml(occupation.name ?? "")}"></label>
+<label>职业点公式<select data-occupation="pointFormula">${formulaOptions(occupation.pointFormula)}</select></label>
+<label>信用评级下限<input data-occupation="creditMin" data-integer="true" inputmode="numeric" value="${escapeHtml(occupation.creditMin ?? "")}"></label>
+<label>信用评级上限<input data-occupation="creditMax" data-integer="true" inputmode="numeric" value="${escapeHtml(occupation.creditMax ?? "")}"></label>
+<div id="occupational-skills">${occupationalNames.map((name) => occupationalRow(name)).join("")}</div>
+<button type="button" id="add-occupational-skill">增加本职技能</button>
+<pre id="occupation-summary">${escapeHtml(summary)}</pre>
+<h2>技能</h2>
+<pre id="point-pools">${escapeHtml(pointPoolText(preview))}</pre>
+<div class="table-wrap">
+<table>
+<thead><tr><th>技能</th><th>专攻</th><th>基础</th><th>成长</th><th>职业点</th><th>兴趣点</th><th>普通 / 困难 / 极难</th><th></th><th></th></tr></thead>
+<tbody id="skill-rows">${skills.map((skill, index) => skillRow(skill, preview.skills[index])).join("")}</tbody>
+</table>
+</div>
+<button type="button" id="add-skill">增加技能</button>
+</section>
+<section id="panel-story" data-panel="story" role="tabpanel" aria-labelledby="tab-story" hidden>
+${backgroundHtml}
+</section>
+<section id="panel-gear" data-panel="gear" role="tabpanel" aria-labelledby="tab-gear" hidden>
+<h2>武器</h2>
+<p>伤害里的 DB、半DB 按文字填写。</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>名称</th><th>类型</th><th>技能</th><th>伤害</th><th>数量</th><th></th></tr></thead>
+<tbody id="weapon-rows">${weapons.map((weapon) => weaponRow(weapon)).join("")}</tbody>
+</table>
+</div>
+<button type="button" id="add-weapon">增加武器</button>
+<h2>护甲</h2>
+<label><input type="checkbox" id="armor-enabled"${armorChecked}> 穿着护甲</label>
+<div id="armor-fields"${armorHidden}>
+<label>名称<input id="armor-name" value="${escapeHtml(armor?.name ?? "")}"></label>
+<label><input type="checkbox" id="armor-mov"${movChecked}> 计入移动惩罚</label>
+<label>移动惩罚<input id="armor-penalty" data-integer="true" inputmode="numeric" value="${escapeHtml(armor?.movPenalty ?? "")}"></label>
+</div>
+<h2>物品</h2>
+<label>现金（可选）<input id="cash" data-integer="true" inputmode="numeric" value="${escapeHtml(possessions.cash ?? "")}"></label>
+<table>
+<thead><tr><th>名称</th><th></th></tr></thead>
+<tbody id="item-rows">${(possessions.items ?? []).map((item) => namedRow("item-row", item?.name)).join("")}</tbody>
+</table>
+<button type="button" id="add-item">增加物品</button>
+<h2>法术</h2>
+<table>
+<thead><tr><th>名称</th><th></th></tr></thead>
+<tbody id="spell-rows">${spells.map((spell) => namedRow("spell-row", spell?.name)).join("")}</tbody>
+</table>
+<button type="button" id="add-spell">增加法术</button>
+</section>
+${optionList("skill-names", SKILL_NAMES)}
+${optionList("fighting-specialties", Object.keys(FIGHTING_SPECIALTY_BASES))}
+${optionList("firearms-specialties", Object.keys(FIREARMS_SPECIALTY_BASES))}
 <p id="errors" class="errors"></p>
 <div class="actions"><button type="submit">保存</button></div>
 </form>
+<dialog id="rolls-dialog">
+<label>生成数量 X<input id="roll-count" inputmode="numeric"></label>
+<p id="roll-error" class="errors"></p>
+<div class="actions"><button type="button" id="start-rolls">开始骰点</button> <button type="button" id="close-rolls">关闭</button></div>
+<div id="roll-results"></div>
+</dialog>
+<dialog id="point-buy-dialog">
+<label>购点总额<input id="point-buy-total" inputmode="numeric"></label>
+<label><input type="checkbox" id="point-buy-luck"> 包含幸运</label>
+<p id="point-buy-error" class="errors"></p>
+<div class="actions"><button type="button" id="point-buy-confirm">确定</button> <button type="button" id="point-buy-cancel">取消</button></div>
+</dialog>
 ${extra}`);
 }
 

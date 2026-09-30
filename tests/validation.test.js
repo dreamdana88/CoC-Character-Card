@@ -13,6 +13,18 @@ test("a legal character passes", () => {
   assert.equal(result.errors, undefined);
 });
 
+test("hand-entered sanity can differ from POW and cannot exceed 99", () => {
+  const card = minimalCharacter();
+  card.sanity = 40;
+  assert.equal(validateCharacter(card).ok, true);
+
+  card.sanity = 99;
+  assert.equal(validateCharacter(card).ok, true);
+
+  card.sanity = 100;
+  assert.match(messages(validateCharacter(card)), /理智不能超过 99/);
+});
+
 test("playerName is display text and does not replace the owner id", () => {
   const card = minimalCharacter();
   delete card.ownerDiscordUserId;

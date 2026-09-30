@@ -113,6 +113,11 @@ export function validateCharacter(card) {
     else if (!ERAS.includes(identity.era)) fail("identity.era", "时代必须是 1920s、现代或其他");
   }
 
+  if (Object.hasOwn(card, "sanity")) {
+    if (typeof card.sanity !== "number" || !Number.isInteger(card.sanity)) fail("sanity", "理智必须是整数");
+    else if (card.sanity > 99) fail("sanity", "理智不能超过 99");
+  }
+
   const characteristics = requireObject(card.characteristics, "characteristics", fail);
   if (characteristics) {
     for (const key of CHARACTERISTIC_FIELDS) {

@@ -129,7 +129,7 @@ function validBody(name = "奈洛莉") {
 }
 
 test("character sources do not embed the bot token or production guild", () => {
-  for (const file of ["api/characters.js", "web/pages.js", "web/site.css", "server.js"]) {
+  for (const file of ["api/characters.js", "web/pages.js", "web/editor.js", "web/site.css", "server.js"]) {
     const source = readFileSync(join(root, file), "utf8");
     assert.equal(source.includes("1447978053665030280"), false, file);
     assert.equal(source.includes("Bot "), false, file);
@@ -149,6 +149,8 @@ test("guests cannot open character pages or the character API", async () => {
     const routes = [
       ["GET", "/api/characters"],
       ["POST", "/api/characters"],
+      ["POST", "/api/characters/preview"],
+      ["POST", "/api/characteristics/rolls"],
       ["GET", "/api/characters/card-1"],
       ["PATCH", "/api/characters/card-1"],
       ["DELETE", "/api/characters/card-1"],
@@ -216,7 +218,7 @@ test("a signed-in investigator only lists and opens their own card", async () =>
   });
 });
 
-test("creating a card ignores the client id and owner and stores legal empty sections", async () => {
+test("creating a card ignores the client id and owner and stores the submitted sheet", async () => {
   await withDb(async (db, dbPath) => {
     const cookie = sessionFor(db, USER_A);
     const response = await call(db, { method: "POST", url: "/api/characters", cookie, body: validBody("<img src=x onerror=alert(1)>") });
@@ -225,17 +227,26 @@ test("creating a card ignores the client id and owner and stores legal empty sec
     assert.match(body.id, /^[0-9a-f-]{36}$/);
     assert.equal(body.id === "client-picked", false);
     assert.equal(Object.hasOwn(body, "ownerDiscordUserId"), false);
-    assert.equal(Object.hasOwn(body, "occupation"), false);
+    assert.equal(Object.hasOwn(body, "pointBuy"), false);
+    assert.equal(body.occupation.pointFormula, "EDU_X4");
     assert.equal(body.identity.name, "<img src=x onerror=alert(1)>");
 
     const stored = getCharacter(db, body.id).character;
     assert.equal(stored.ownerDiscordUserId, USER_A);
     assert.equal(stored.schemaVersion, 1);
     assert.equal(stored.ruleset, "coc7");
-    assert.equal(stored.occupation.pointFormula, "CUSTOM");
-    assert.equal(stored.occupation.id, "unset");
-    assert.deepEqual(stored.occupation.occupationalSkills, []);
-    assert.deepEqual(stored.skills, []);
+    assert.equal(stored.occupation.pointFormula, "EDU_X4");
+    assert.equal(stored.occupation.id, "accountant");
+    assert.equal(stored.occupation.name, "会计师");
+    assert.deepEqual(stored.occupation.occupationalSkills, ["会计"]);
+    assert.deepEqual(stored.skills, [{
+      name: "会计",
+      specialty: "",
+      base: 5,
+      growth: 0,
+      occupationPoints: 1,
+      interestPoints: 0,
+    }]);
     assert.deepEqual(stored.weapons, []);
     assert.equal(stored.armor, null);
     assert.deepEqual(stored.possessions, { items: [] });
@@ -296,6 +307,7 @@ test("editing persists, and an illegal field does not change the stored card", a
     assert.equal(unchanged.character.occupation.name, "会计师");
 
     const payload = validBody("改名");
+    delete payload.skills;
     payload.ownerDiscordUserId = USER_B;
     payload.id = "other-id";
     const updated = await call(db, { method: "PATCH", url: "/api/characters/card-1", cookie, body: payload });
@@ -340,7 +352,7 @@ test("duplicate stays with the same owner and delete removes only that card", as
     assert.equal(copied.identity.name, "原本");
     const stored = getCharacter(db, copied.id);
     assert.equal(stored.character.ownerDiscordUserId, USER_A);
-    assert.equal(stored.character.occupation.pointFormula, "CUSTOM");
+    assert.equal(stored.character.occupation.pointFormula, "EDU_X4");
     const names = json(await call(db, { url: "/api/characters", cookie })).characters.map((card) => card.id);
     assert.deepEqual(names.sort(), [created.id, copied.id].sort());
 

@@ -39,3 +39,19 @@ export {
 } from "./coc7.js";
 
 export { validateCharacter } from "./validation.js";
+
+export {
+  FIGHTING_SPECIALTY_BASES,
+  FIREARMS_SPECIALTY_BASES,
+  FORMULA_LABELS,
+  ROLL_SET_LIMIT,
+  SKILL_NAMES,
+  derivePreview,
+  describeCharacteristicSet,
+  expectedSkillBase,
+  pointBuyUsage,
+  rollCharacteristicSet,
+  rollCharacteristicSets,
+  skillBaseErrors,
+  starterSkills,
+} from "./sheet.js";

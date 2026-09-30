@@ -68,3 +68,92 @@ ul.cards li {
   align-items: center;
   margin: 0.6rem 0;
 }
+
+h2 {
+  font-size: 1.1rem;
+  margin-top: 1.4rem;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid #ccc;
+  margin: 0 0 1rem;
+}
+
+.sheet-tabs button {
+  flex: 0 0 auto;
+  width: auto;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.65rem 0.75rem;
+  color: #555;
+}
+
+.sheet-tabs button[aria-selected="true"] {
+  border-bottom-color: #3a2a55;
+  color: #3a2a55;
+  font-weight: 700;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+dialog {
+  width: min(36rem, calc(100% - 2rem));
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+}
+
+.roll-set {
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.roll-set p {
+  white-space: pre-wrap;
+  margin: 0 0 0.6rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #ccc;
+  padding: 0.2rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+td input {
+  width: 6.5rem;
+}
+
+.occupational-row,
+.repeat-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.3rem 0;
+}
+
+dialog {
+  width: min(36rem, 100%);
+}
+
+#derived,
+#occupation-summary,
+#point-pools,
+#age-note,
+#point-buy-status {
+  white-space: pre-wrap;
+}

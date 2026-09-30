@@ -4,6 +4,7 @@ import { SESSION_COOKIE } from "../auth/constants.js";
 import { AuthError, authStatus } from "../auth/errors.js";
 import { readCookie } from "../auth/http.js";
 import { readSession } from "../auth/store.js";
+import { RuleError } from "../rules/coc7.js";
 import {
   BACKGROUND_FIELDS,
   CHARACTERISTIC_FIELDS,
@@ -11,6 +12,7 @@ import {
   RULESET,
   SCHEMA_VERSION,
 } from "../rules/characterSchema.js";
+import { derivePreview, pointBuyUsage, rollCharacteristicSets, skillBaseErrors } from "../rules/sheet.js";
 import { validateCharacter } from "../rules/validation.js";
 import {
   createCharacter,
@@ -22,7 +24,7 @@ import {
 } from "../storage/index.js";
 import { StorageError } from "../storage/errors.js";
 
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 512 * 1024;
 const SESSION_FAILURES = new Set([
   "SESSION_MISSING",
   "SESSION_EXPIRED",
@@ -52,7 +54,6 @@ function copyKnown(source, keys) {
   return out;
 }
 
-// B4 页面不编辑职业。CUSTOM 只是校验能通过的空职业，不代表已经选了职业。
 function emptyOccupation() {
   return {
     id: "unset",
@@ -68,23 +69,204 @@ function emptyBackground() {
   return Object.fromEntries(BACKGROUND_FIELDS.map((key) => [key, ""]));
 }
 
-function emptySections() {
+function readOccupation(occupation) {
+  if (!occupation || typeof occupation !== "object" || Array.isArray(occupation)) return occupation;
+  const id = typeof occupation.id === "string" && occupation.id.trim() !== "" ? occupation.id : "";
   return {
-    occupation: emptyOccupation(),
-    skills: [],
-    background: emptyBackground(),
-    weapons: [],
-    armor: null,
-    possessions: { items: [] },
-    spells: [],
+    id,
+    name: occupation.name,
+    pointFormula: occupation.pointFormula,
+    creditMin: occupation.creditMin,
+    creditMax: occupation.creditMax,
+    occupationalSkills: occupation.occupationalSkills,
   };
 }
 
+function readSkill(skill) {
+  if (!skill || typeof skill !== "object" || Array.isArray(skill)) return skill;
+  const out = {
+    name: skill.name,
+    base: skill.base,
+    growth: skill.growth,
+    occupationPoints: skill.occupationPoints,
+    interestPoints: skill.interestPoints,
+  };
+  out.specialty = Object.hasOwn(skill, "specialty") ? skill.specialty : "";
+  if (Object.hasOwn(skill, "key")) out.key = skill.key;
+  return out;
+}
+
+function readSkills(skills) {
+  if (!Array.isArray(skills)) return skills;
+  return skills.map(readSkill);
+}
+
+function readWeapon(weapon, index, errors) {
+  if (!weapon || typeof weapon !== "object" || Array.isArray(weapon)) return weapon;
+  const out = {
+    name: weapon.name,
+    type: typeof weapon.type === "string" ? weapon.type : "",
+    skill: typeof weapon.skill === "string" ? weapon.skill : "",
+    damage: typeof weapon.damage === "string" ? weapon.damage : "",
+  };
+  if (Object.hasOwn(weapon, "quantity")) {
+    const quantity = weapon.quantity;
+    if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 0) {
+      errors.push({ path: `weapons[${index}].quantity`, message: "数量必须是非负整数" });
+    } else {
+      out.quantity = quantity;
+    }
+  }
+  return out;
+}
+
+function readWeapons(weapons, errors) {
+  if (!Array.isArray(weapons)) return weapons;
+  return weapons.map((weapon, index) => readWeapon(weapon, index, errors));
+}
+
+function readArmor(armor) {
+  if (armor === null) return null;
+  if (!armor || typeof armor !== "object" || Array.isArray(armor)) return armor;
+  const out = {
+    name: armor.name,
+    applyMovPenalty: armor.applyMovPenalty,
+  };
+  if (Object.hasOwn(armor, "movPenalty")) out.movPenalty = armor.movPenalty;
+  return out;
+}
+
+function readNamedList(list) {
+  if (!Array.isArray(list)) return list;
+  return list.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+    return { name: entry.name };
+  });
+}
+
+function readPossessions(possessions, errors) {
+  if (!possessions || typeof possessions !== "object" || Array.isArray(possessions)) return possessions;
+  const out = { items: readNamedList(possessions.items) };
+  if (Object.hasOwn(possessions, "cash")) {
+    const cash = possessions.cash;
+    if (typeof cash !== "number" || !Number.isInteger(cash) || cash < 0) {
+      errors.push({ path: "possessions.cash", message: "现金必须是非负整数" });
+    } else {
+      out.cash = cash;
+    }
+  }
+  return out;
+}
+
+function sectionValue(body, key, existing, fallback, read) {
+  if (Object.hasOwn(body, key)) return read(body[key]);
+  if (existing && Object.hasOwn(existing, key)) return existing[key];
+  return fallback;
+}
+
+function pointBuyError(characteristics, pointBuy) {
+  const usage = pointBuyUsage(characteristics, pointBuy);
+  if (!usage.ok) return usage.message;
+  if (usage.remaining < 0) return `购点超过总额，已用 ${usage.used} / ${usage.total}`;
+  return "";
+}
+
+// 请求没带的栏目沿用已保存的内容。购点额度不写入角色卡。
+function assembleCard(body, { id, ownerId, existing }) {
+  const errors = [];
+  const source = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const card = {
+    schemaVersion: SCHEMA_VERSION,
+    ruleset: RULESET,
+    id,
+    ownerDiscordUserId: ownerId,
+    identity: copyKnown(source.identity, IDENTITY_FIELDS),
+    characteristics: copyKnown(source.characteristics, CHARACTERISTIC_FIELDS),
+    occupation: sectionValue(source, "occupation", existing, emptyOccupation(), readOccupation),
+    skills: sectionValue(source, "skills", existing, [], readSkills),
+    background: sectionValue(source, "background", existing, emptyBackground(), (value) => copyKnown(value, BACKGROUND_FIELDS)),
+    weapons: sectionValue(source, "weapons", existing, [], (value) => readWeapons(value, errors)),
+    armor: sectionValue(source, "armor", existing, null, readArmor),
+    possessions: sectionValue(source, "possessions", existing, { items: [] }, (value) => readPossessions(value, errors)),
+    spells: sectionValue(source, "spells", existing, [], readNamedList),
+  };
+  if (Object.hasOwn(source, "sanity")) {
+    if (source.sanity !== null && source.sanity !== "") {
+      if (typeof source.sanity !== "number" || !Number.isInteger(source.sanity)) {
+        errors.push({ path: "sanity", message: "理智必须是整数" });
+      } else if (source.sanity > 99) {
+        errors.push({ path: "sanity", message: "理智不能超过 99" });
+      } else {
+        card.sanity = source.sanity;
+      }
+    }
+  } else if (existing && Object.hasOwn(existing, "sanity")) {
+    card.sanity = existing.sanity;
+  }
+  if (Object.hasOwn(source, "pointBuy")) {
+    const message = pointBuyError(card.characteristics, source.pointBuy);
+    if (message) errors.push({ path: "pointBuy", message });
+  }
+  errors.push(...skillBaseErrors(card));
+  return { card, errors };
+}
+
+function presentSkill(skill) {
+  const out = {
+    name: skill?.name,
+    specialty: typeof skill?.specialty === "string" ? skill.specialty : "",
+    base: skill?.base,
+    growth: skill?.growth,
+    occupationPoints: skill?.occupationPoints,
+    interestPoints: skill?.interestPoints,
+  };
+  if (skill && Object.hasOwn(skill, "key")) out.key = skill.key;
+  return out;
+}
+
+function presentWeapon(weapon) {
+  const out = {
+    name: weapon?.name,
+    type: typeof weapon?.type === "string" ? weapon.type : "",
+    skill: typeof weapon?.skill === "string" ? weapon.skill : "",
+    damage: typeof weapon?.damage === "string" ? weapon.damage : "",
+  };
+  if (weapon && Object.hasOwn(weapon, "quantity")) out.quantity = weapon.quantity;
+  return out;
+}
+
+function presentArmor(armor) {
+  if (armor == null) return null;
+  const out = {
+    name: armor.name,
+    applyMovPenalty: armor.applyMovPenalty,
+  };
+  if (Object.hasOwn(armor, "movPenalty")) out.movPenalty = armor.movPenalty;
+  return out;
+}
+
+function presentPossessions(possessions) {
+  const items = Array.isArray(possessions?.items) ? possessions.items.map((item) => ({ name: item?.name })) : [];
+  const out = { items };
+  if (possessions && Object.hasOwn(possessions, "cash")) out.cash = possessions.cash;
+  return out;
+}
+
 function present(record) {
+  const card = record.character;
   return {
-    id: record.character.id,
-    identity: copyKnown(record.character.identity, IDENTITY_FIELDS),
-    characteristics: copyKnown(record.character.characteristics, CHARACTERISTIC_FIELDS),
+    id: card.id,
+    identity: copyKnown(card.identity, IDENTITY_FIELDS),
+    characteristics: copyKnown(card.characteristics, CHARACTERISTIC_FIELDS),
+    occupation: readOccupation(card.occupation),
+    skills: Array.isArray(card.skills) ? card.skills.map(presentSkill) : [],
+    background: copyKnown(card.background, BACKGROUND_FIELDS),
+    weapons: Array.isArray(card.weapons) ? card.weapons.map(presentWeapon) : [],
+    armor: presentArmor(card.armor),
+    possessions: presentPossessions(card.possessions),
+    spells: Array.isArray(card.spells) ? card.spells.map((spell) => ({ name: spell?.name })) : [],
+    derived: derivePreview(card),
+    ...(Object.hasOwn(card, "sanity") ? { sanity: card.sanity } : {}),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -145,6 +327,9 @@ async function readPayload(request) {
     return parsePayload(request.body);
   }
   const raw = await readRawBody(request);
+  if (raw.length > MAX_BODY_BYTES) {
+    throw Object.assign(new Error("请求体过大"), { code: "BODY_TOO_LARGE" });
+  }
   return parsePayload(raw);
 }
 
@@ -181,6 +366,8 @@ function sendStorageError(response, error) {
 
 function routeOf(pathname) {
   if (pathname === "/api/characters") return { name: "collection" };
+  if (pathname === "/api/characters/preview") return { name: "preview" };
+  if (pathname === "/api/characteristics/rolls") return { name: "rolls" };
   const duplicated = pathname.match(/^\/api\/characters\/([^/]+)\/duplicate$/);
   if (duplicated) return { name: "duplicate", id: decodeURIComponent(duplicated[1]) };
   const one = pathname.match(/^\/api\/characters\/([^/]+)$/);
@@ -188,35 +375,8 @@ function routeOf(pathname) {
   return null;
 }
 
-function assembleCreate(body, ownerId) {
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    ruleset: RULESET,
-    id: randomUUID(),
-    ownerDiscordUserId: ownerId,
-    identity: copyKnown(body.identity, IDENTITY_FIELDS),
-    characteristics: copyKnown(body.characteristics, CHARACTERISTIC_FIELDS),
-    ...emptySections(),
-  };
-}
-
-// 请求体只有简介和属性。职业、技能和背景沿用已保存的内容。
-function assembleUpdate(existing, body, ownerId, id) {
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    ruleset: RULESET,
-    id,
-    ownerDiscordUserId: ownerId,
-    identity: copyKnown(body.identity, IDENTITY_FIELDS),
-    characteristics: copyKnown(body.characteristics, CHARACTERISTIC_FIELDS),
-    occupation: existing.occupation,
-    skills: existing.skills,
-    background: existing.background,
-    weapons: existing.weapons,
-    armor: existing.armor,
-    possessions: existing.possessions,
-    spells: existing.spells,
-  };
+function mergedErrors(assembled, validated) {
+  return assembled.errors.concat(validated.ok ? [] : validated.errors);
 }
 
 export async function handleCharacterApi(request, response, context) {
@@ -236,6 +396,8 @@ export async function handleCharacterApi(request, response, context) {
 
   const allowed = {
     collection: ["GET", "POST"],
+    preview: ["POST"],
+    rolls: ["POST"],
     one: ["GET", "PATCH", "DELETE"],
     duplicate: ["POST"],
   };
@@ -266,19 +428,61 @@ export async function handleCharacterApi(request, response, context) {
       return;
     }
 
+    if (route.name === "preview" && request.method === "POST") {
+      const payload = await readPayload(request);
+      if (payload.error) {
+        sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: payload.error });
+        return;
+      }
+      const assembled = assembleCard(payload.value, {
+        id: "preview",
+        ownerId: user.userDiscordId,
+        existing: null,
+      });
+      const pointBuy = Object.hasOwn(payload.value, "pointBuy") ? payload.value.pointBuy : undefined;
+      sendJson(response, 200, {
+        derived: derivePreview(assembled.card, pointBuy ? { pointBuy } : {}),
+      });
+      return;
+    }
+
+    if (route.name === "rolls" && request.method === "POST") {
+      const payload = await readPayload(request);
+      if (payload.error) {
+        sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: payload.error });
+        return;
+      }
+      try {
+        const sets = rollCharacteristicSets(payload.value.count, context.rng ?? Math.random);
+        sendJson(response, 200, { sets });
+      } catch (error) {
+        if (error instanceof RuleError) {
+          sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
     if (route.name === "collection" && request.method === "POST") {
       const payload = await readPayload(request);
       if (payload.error) {
         sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: payload.error });
         return;
       }
-      const card = assembleCreate(payload.value, user.userDiscordId);
-      const result = validateCharacter(card);
-      if (!result.ok) {
-        validationResponse(response, result.errors);
+      const assembled = assembleCard(payload.value, {
+        id: randomUUID(),
+        ownerId: user.userDiscordId,
+        existing: null,
+      });
+      const validated = validateCharacter(assembled.card);
+      const errors = mergedErrors(assembled, validated);
+      if (errors.length > 0) {
+        validationResponse(response, errors);
         return;
       }
-      sendJson(response, 201, present(createCharacter(context.db, card, { now: context.now })));
+      sendJson(response, 201, present(createCharacter(context.db, assembled.card, { now: context.now })));
       return;
     }
 
@@ -297,13 +501,18 @@ export async function handleCharacterApi(request, response, context) {
         sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: payload.error });
         return;
       }
-      const card = assembleUpdate(existing.character, payload.value, user.userDiscordId, route.id);
-      const result = validateCharacter(card);
-      if (!result.ok) {
-        validationResponse(response, result.errors);
+      const assembled = assembleCard(payload.value, {
+        id: route.id,
+        ownerId: user.userDiscordId,
+        existing: existing.character,
+      });
+      const validated = validateCharacter(assembled.card);
+      const errors = mergedErrors(assembled, validated);
+      if (errors.length > 0) {
+        validationResponse(response, errors);
         return;
       }
-      sendJson(response, 200, present(updateCharacter(context.db, route.id, card, { now: context.now })));
+      sendJson(response, 200, present(updateCharacter(context.db, route.id, assembled.card, { now: context.now })));
       return;
     }
 

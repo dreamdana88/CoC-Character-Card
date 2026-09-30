@@ -42,7 +42,7 @@ test("Phase B0 skeleton stays runnable", () => {
   for (const dir of ["web", "api", "tests"]) {
     assert.equal(statSync(join(root, dir)).isDirectory(), true, dir);
   }
-  assert.deepEqual(readdirSync(join(root, "web")).sort(), ["pages.js", "site.css"]);
+  assert.deepEqual(readdirSync(join(root, "web")).sort(), ["editor.js", "pages.js", "site.css"]);
   assert.deepEqual(readdirSync(join(root, "api")).sort(), ["characters.js"]);
   assert.equal(statSync(join(root, "server.js")).isFile(), true);
   assert.deepEqual(readdirSync(join(root, "storage")).sort(), [
@@ -64,7 +64,7 @@ test("Phase B0 skeleton stays runnable", () => {
     "store.js",
   ]);
   const ruleFiles = readdirSync(join(root, "rules")).filter((name) => name !== ".gitkeep").sort();
-  assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "validation.js"]);
+  assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "sheet.js", "validation.js"]);
   for (const file of ruleFiles) {
     const source = readFileSync(join(root, "rules", file), "utf8");
     assert.equal(source.includes("better-sqlite3"), false, file);
@@ -108,8 +108,8 @@ test("Phase B0 skeleton stays runnable", () => {
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
-  assert.match(readme, /Phase B4/);
+  assert.match(readme, /Phase B5/);
   assert.match(readme, /better-sqlite3/);
   assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
-  assert.match(agents, /B0、B1、B2、B3、B4 已完成/);
+  assert.match(agents, /B0、B1、B2、B3、B4、B5 已完成/);
 });

@@ -18,7 +18,11 @@ export async function handleRequest(request, response, context) {
       await handleAuthRequest(request, response, context);
       return;
     }
-    if (url.pathname === "/api/characters" || url.pathname.startsWith("/api/characters/")) {
+    if (
+      url.pathname === "/api/characters"
+      || url.pathname.startsWith("/api/characters/")
+      || url.pathname === "/api/characteristics/rolls"
+    ) {
       await handleCharacterApi(request, response, context);
       return;
     }
