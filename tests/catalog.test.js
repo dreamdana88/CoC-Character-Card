@@ -79,6 +79,9 @@ test("occupations come from the workbook and custom stays unguessed", () => {
     assert.equal(OCCUPATION_POINT_FORMULAS.includes(occupation.pointFormula), true, occupation.name);
     assert.equal(Array.isArray(occupation.occupationalSkills), true, occupation.name);
     assert.equal(typeof occupation.skillText, "string", occupation.name);
+    for (const skill of occupation.occupationalSkills) {
+      assert.equal(SKILL_NAMES.includes(skill), true, `${occupation.name} ${skill}`);
+    }
     const packed = JSON.stringify(occupation);
     assert.equal(packed.includes("附表"), false, occupation.name);
     assert.equal(packed.includes("SUM("), false, occupation.name);
@@ -86,29 +89,79 @@ test("occupations come from the workbook and custom stays unguessed", () => {
   }
 });
 
+test("required skill abbreviations map, and choices stay manual", () => {
+  const byName = (name) => OCCUPATIONS.find((item) => item.name === name);
+  const archaeologist = byName("考古学家（原作向）");
+  assert.equal(archaeologist.skillText, "估价，考古，历史，外语，图书馆，侦查，机械维修，导航或科学（任一：如化学、物理、地理等）。");
+  assert.equal(archaeologist.occupationalSkills.includes("考古学"), true);
+  assert.equal(archaeologist.occupationalSkills.includes("导航"), false);
+  assert.equal(archaeologist.occupationalSkills.includes("科学"), false);
+  const museum = byName("博物馆管理员");
+  assert.equal(museum.skillText.includes("考古"), true);
+  assert.equal(museum.occupationalSkills.includes("考古学"), true);
+  const namedArchaeologist = byName("考古学家");
+  assert.equal(namedArchaeologist.skillText.includes("考古"), false);
+  assert.equal(namedArchaeologist.occupationalSkills.includes("考古学"), false);
+
+  const trainer = byName("动物训练师");
+  assert.equal(trainer.skillText, "跳跃，聆听，自然，心理学，科学（动物学），潜行，追踪，任意一项其他个人或时代特长。");
+  assert.equal(trainer.occupationalSkills.includes("博物学"), true);
+  assert.equal(trainer.occupationalSkills.includes("自然"), false);
+  for (const name of ["探险家（古典）", "农民", "猎人", "部落成员", "饲养员", "传教士", "旅行家"]) {
+    const occupation = byName(name);
+    assert.equal(occupation.skillText.includes("自然"), true, name);
+    assert.equal(occupation.occupationalSkills.includes("博物学"), true, name);
+    assert.equal(occupation.occupationalSkills.includes("自然"), false, name);
+  }
+  const artist = byName("艺术家");
+  assert.equal(artist.skillText.includes("历史或自然"), true);
+  assert.equal(artist.occupationalSkills.includes("博物学"), false);
+  assert.equal(artist.occupationalSkills.includes("历史"), false);
+  const cowboy = byName("牛仔");
+  assert.equal(cowboy.skillText.includes("急救或自然"), true);
+  assert.equal(cowboy.skillText.includes("骑乘"), true);
+  assert.equal(cowboy.occupationalSkills.includes("博物学"), false);
+  assert.equal(cowboy.occupationalSkills.includes("骑术"), true);
+
+  for (const name of ["建筑师", "设计师", "实验室助理", "科学家"]) {
+    const occupation = byName(name);
+    assert.equal(occupation.skillText.includes("计算机或图书馆"), true, name);
+    assert.equal(occupation.occupationalSkills.includes("计算机使用"), false, name);
+    assert.equal(occupation.occupationalSkills.includes("图书馆使用"), false, name);
+  }
+  const secretary = byName("秘书");
+  assert.equal(secretary.skillText.includes("图书馆或计算机"), true);
+  assert.equal(secretary.occupationalSkills.includes("计算机使用"), false);
+  assert.equal(secretary.occupationalSkills.includes("图书馆使用"), false);
+  const programmer = byName("程序员、电子工程师（现代）");
+  assert.equal(programmer.occupationalSkills.includes("计算机使用"), true);
+  assert.equal(programmer.occupationalSkills.includes("图书馆使用"), true);
+
+  const stunt = byName("替身演员");
+  assert.equal(stunt.skillText.includes("下面任选一项"), true);
+  assert.equal(stunt.occupationalSkills.includes("骑术"), false);
+  assert.equal(stunt.occupationalSkills.includes("汽车驾驶"), false);
+  assert.equal(stunt.occupationalSkills.includes("驾驶"), false);
+});
+
 test("weapons come from the workbook catalog", () => {
   assert.deepEqual(WEAPON_CATEGORIES, ["常规武器", "手枪", "步枪", "霰弹枪", "突击步枪", "冲锋枪", "机枪", "特殊武器"]);
-  assert.equal(WEAPONS.length, 113);
-  const counts = Object.fromEntries(WEAPON_CATEGORIES.map((category) => [category, 0]));
+  const explanationNames = ["受伤程度", "轻度", "中度", "重度", "致命", "终结", "血肉横飞", "护甲调整", "关于霰弹枪"];
+  const explanationSkills = ["伤害等级", "部位瞄准", "1D3", "1D6", "1D10", "2D10", "4D10", "8D10"];
   for (const weapon of WEAPONS) {
     assert.notEqual(weapon.name.trim(), "");
     assert.notEqual(weapon.skill.trim(), "");
-    counts[weapon.type] += 1;
+    assert.notEqual(weapon.damage.trim(), "");
+    assert.equal(WEAPON_CATEGORIES.includes(weapon.type), true, weapon.name);
+    assert.equal(explanationNames.some((name) => weapon.name.startsWith(name)), false, weapon.name);
+    assert.equal(explanationSkills.includes(weapon.skill), false, weapon.name);
     const packed = JSON.stringify(weapon);
     assert.equal(packed.includes("excel"), false, weapon.name);
     assert.equal(packed.includes("VLOOKUP"), false, weapon.name);
   }
-  assert.deepEqual(counts, {
-    "常规武器": 28,
-    "手枪": 16,
-    "步枪": 12,
-    "霰弹枪": 9,
-    "突击步枪": 9,
-    "冲锋枪": 6,
-    "机枪": 8,
-    "特殊武器": 25,
-  });
   assert.equal(WEAPONS.some((weapon) => weapon.name === "毒剂" || weapon.name === "术语解释"), false);
+  assert.equal(WEAPONS.some((weapon) => weapon.name === "M72 式单发轻型反坦克炮"), true);
+  assert.equal(WEAPONS.some((weapon) => weapon.name === "20 号霰弹枪(双管)"), true);
 
   const shuriken = WEAPONS.find((weapon) => weapon.name === "手里剑");
   assert.deepEqual(shuriken, {

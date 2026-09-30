@@ -305,6 +305,11 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(fresh.body, /加入所选武器/);
     assert.match(fresh.body, />手里剑</);
     assert.match(fresh.body, />黄铜指虎</);
+    assert.equal(fresh.body.includes("受伤程度"), false);
+    assert.equal(fresh.body.includes("血肉横飞"), false);
+    assert.equal(fresh.body.includes("护甲调整"), false);
+    assert.equal(fresh.body.includes("关于霰弹枪"), false);
+    assert.equal(fresh.body.includes("伤害等级"), false);
     assert.match(fresh.body, /人类学/);
     assert.equal(fresh.body.includes('id="point-buy-total" value='), false);
     assert.equal(fresh.body.includes('name="ownerDiscordUserId"'), false);

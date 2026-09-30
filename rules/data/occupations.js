@@ -112,6 +112,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "跳跃",
       "聆听",
+      "博物学",
       "心理学",
       "科学",
       "潜行",
@@ -159,6 +160,7 @@ export const OCCUPATIONS = Object.freeze([
     "creditMax": 40,
     "occupationalSkills": [
       "估价",
+      "考古学",
       "历史",
       "外语",
       "图书馆使用",
@@ -224,6 +226,7 @@ export const OCCUPATIONS = Object.freeze([
       "攀爬",
       "跳跃",
       "格斗",
+      "骑术",
       "游泳",
       "投掷"
     ],
@@ -268,7 +271,9 @@ export const OCCUPATIONS = Object.freeze([
     "creditMax": 50,
     "occupationalSkills": [
       "射击",
+      "博物学",
       "导航",
+      "科学",
       "潜行",
       "追踪"
     ],
@@ -394,6 +399,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "闪避",
       "跳跃",
+      "骑术",
       "生存",
       "投掷",
       "追踪"
@@ -408,7 +414,9 @@ export const OCCUPATIONS = Object.freeze([
     "creditMax": 40,
     "occupationalSkills": [
       "会计",
+      "技艺",
       "机械维修",
+      "博物学",
       "侦查"
     ],
     "skillText": "会计，技艺（任二），机械维修，自然，侦查，任意两项其他个人或时代特长。"
@@ -516,6 +524,7 @@ export const OCCUPATIONS = Object.freeze([
     "creditMin": 10,
     "creditMax": 80,
     "occupationalSkills": [
+      "技艺",
       "汽车驾驶",
       "聆听",
       "潜行"
@@ -612,7 +621,8 @@ export const OCCUPATIONS = Object.freeze([
       "汽车驾驶",
       "历史",
       "神秘学",
-      "心理学"
+      "心理学",
+      "潜行"
     ],
     "skillText": "两项社交技能（取悦、话术、恐吓、说服），汽车驾驶，格斗（斗殴）或射击，历史，神秘学，心理学，潜行。※经KP允许 可用催眠替换其中一项。"
   },
@@ -640,7 +650,8 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "技艺",
       "射击",
-      "外语"
+      "外语",
+      "骑术"
     ],
     "skillText": "技艺（任一），射击，外语，骑乘，一项社交技能（取悦、话术、恐吓、说服），任意三项其他个人或时代特长。"
   },
@@ -812,6 +823,7 @@ export const OCCUPATIONS = Object.freeze([
       "射击",
       "历史",
       "跳跃",
+      "博物学",
       "导航",
       "外语",
       "生存"
@@ -827,6 +839,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "技艺",
       "机械维修",
+      "博物学",
       "操作重型机械",
       "追踪"
     ],
@@ -955,7 +968,8 @@ export const OCCUPATIONS = Object.freeze([
       "射击",
       "历史",
       "外语",
-      "导航"
+      "导航",
+      "骑术"
     ],
     "skillText": "技艺（任一），两项社交技能（取悦、话术、恐吓、说服），射击（步枪/霰弹枪），历史，外语（任一），导航，骑乘。"
   },
@@ -999,6 +1013,7 @@ export const OCCUPATIONS = Object.freeze([
     "creditMin": 9,
     "creditMax": 30,
     "occupationalSkills": [
+      "技艺",
       "历史",
       "图书馆使用",
       "母语",
@@ -1050,6 +1065,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "电气维修",
       "外语",
+      "科学",
       "侦查"
     ],
     "skillText": "计算机或图书馆，电气维修，外语，科学（化学和任意两项），侦查，任意一项其他个人特长。"
@@ -1174,7 +1190,8 @@ export const OCCUPATIONS = Object.freeze([
       "技艺",
       "急救",
       "机械维修",
-      "医学"
+      "医学",
+      "博物学"
     ],
     "skillText": "技艺（任一），急救，机械维修，医学，自然，一项社交技能（取悦、话术、恐吓、说服），任意两项其他个人或时代特长。"
   },
@@ -1191,6 +1208,7 @@ export const OCCUPATIONS = Object.freeze([
       "聆听",
       "导航",
       "外语",
+      "生存",
       "追踪"
     ],
     "skillText": "攀爬，急救，跳跃，聆听，导航，外语，生存（阿尔卑斯或类似），追踪。"
@@ -1204,6 +1222,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "会计",
       "估价",
+      "考古学",
       "历史",
       "图书馆使用",
       "神秘学",
@@ -1267,6 +1286,7 @@ export const OCCUPATIONS = Object.freeze([
       "射击",
       "急救",
       "聆听",
+      "博物学",
       "导航",
       "侦查",
       "生存",
@@ -1396,7 +1416,8 @@ export const OCCUPATIONS = Object.freeze([
       "射击",
       "急救",
       "法律",
-      "心理学"
+      "心理学",
+      "侦查"
     ],
     "skillText": "格斗（斗殴），射击，急救，一项社交技能（取悦、话术、恐吓、说服），法律，心理学，侦查和下面的一种个人特长：汽车驾驶或骑乘。"
   },
@@ -1535,6 +1556,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "急救",
       "机械维修",
+      "博物学",
       "导航",
       "驾驶",
       "侦查",
@@ -1577,6 +1599,7 @@ export const OCCUPATIONS = Object.freeze([
     "creditMax": 30,
     "occupationalSkills": [
       "会计",
+      "技艺",
       "母语",
       "心理学"
     ],
@@ -1609,9 +1632,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "射击",
       "潜行",
-      "生存",
-      "机械维修",
-      "外语"
+      "生存"
     ],
     "skillText": "攀爬或游泳，闪避，格斗，射击，潜行，生存，下面任选两项：急救、机械维修、外语。"
   },
@@ -1655,9 +1676,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "急救",
       "跳跃",
-      "游泳",
-      "汽车驾驶",
-      "驾驶"
+      "游泳"
     ],
     "skillText": "攀爬，闪避，电气维修或机械维修，格斗，急救，跳跃，游泳，下面任选一项：潜水、汽车驾驶、驾驶（任一），骑乘。"
   },
@@ -1670,6 +1689,7 @@ export const OCCUPATIONS = Object.freeze([
     "occupationalSkills": [
       "攀爬",
       "聆听",
+      "博物学",
       "神秘学",
       "侦查",
       "游泳",
@@ -1774,6 +1794,7 @@ export const OCCUPATIONS = Object.freeze([
       "会计",
       "闪避",
       "急救",
+      "博物学",
       "医学",
       "科学"
     ],
@@ -2418,6 +2439,7 @@ export const OCCUPATIONS = Object.freeze([
     "creditMin": 5,
     "creditMax": 60,
     "occupationalSkills": [
+      "外语",
       "学识",
       "心理学",
       "聆听"
@@ -2462,6 +2484,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "博物学",
       "神秘学",
+      "学识",
       "心理学",
       "潜行"
     ],
@@ -2788,9 +2811,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "射击",
       "潜行",
-      "生存",
-      "机械维修",
-      "外语"
+      "生存"
     ],
     "skillText": "攀爬或游泳，闪避，格斗，射击，潜行，生存，下面任选两项：急救、机械维修、外语。"
   },
@@ -2805,9 +2826,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "射击",
       "潜行",
-      "生存",
-      "机械维修",
-      "外语"
+      "生存"
     ],
     "skillText": "攀爬或游泳，闪避，格斗，射击，潜行，生存，下面任选两项：急救、机械维修、外语。"
   },
@@ -3058,9 +3077,7 @@ export const OCCUPATIONS = Object.freeze([
       "格斗",
       "射击",
       "潜行",
-      "生存",
-      "机械维修",
-      "外语"
+      "生存"
     ],
     "skillText": "攀爬或游泳，闪避，格斗，射击，潜行，生存，下面任选两项：急救、机械维修、外语。"
   },
@@ -3256,7 +3273,8 @@ export const OCCUPATIONS = Object.freeze([
       "估价",
       "乔装",
       "潜行",
-      "锁匠"
+      "锁匠",
+      "格斗"
     ],
     "skillText": "估价，乔装，一项社交技能（取悦、话术、恐吓、说服），潜行，锁匠，格斗（任意两项），任意一项其他个人或时代特长"
   },
@@ -3512,7 +3530,8 @@ export const OCCUPATIONS = Object.freeze([
       "锁匠",
       "导航",
       "心理学",
-      "侦查"
+      "侦查",
+      "格斗"
     ],
     "skillText": "乔装，一项社交技能（取悦、话术、恐吓、说服），潜行，历史，图书馆，聆听，锁匠，导航，其他语言（欧洲），心理学，侦查，格斗（任意）"
   }
