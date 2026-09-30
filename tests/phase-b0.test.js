@@ -64,9 +64,15 @@ test("Phase B0 skeleton stays runnable", () => {
     "store.js",
   ]);
   const ruleFiles = readdirSync(join(root, "rules")).filter((name) => name !== ".gitkeep").sort();
-  assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "index.js", "sheet.js", "validation.js"]);
-  for (const file of ruleFiles) {
-    const source = readFileSync(join(root, "rules", file), "utf8");
+  assert.deepEqual(ruleFiles, ["characterSchema.js", "coc7.js", "data", "index.js", "sheet.js", "validation.js"]);
+  const dataFiles = readdirSync(join(root, "rules", "data")).filter((name) => name.endsWith(".js")).sort();
+  assert.deepEqual(dataFiles, ["occupations.js", "skills.js", "weapons.js"]);
+  const ruleSources = [
+    ...ruleFiles.filter((name) => name.endsWith(".js")).map((name) => join("rules", name)),
+    ...dataFiles.map((name) => join("rules", "data", name)),
+  ];
+  for (const file of ruleSources) {
+    const source = readFileSync(join(root, file), "utf8");
     assert.equal(source.includes("better-sqlite3"), false, file);
     assert.equal(source.includes("discord"), false, file);
     assert.equal(source.includes("../TeaParty-Bell"), false, file);

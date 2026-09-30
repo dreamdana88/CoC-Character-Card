@@ -23,6 +23,7 @@ test("derived values come from the existing rule functions", () => {
   assert.equal(preview.majorWound, 6);
   assert.equal(preview.mp, 10);
   assert.equal(Object.hasOwn(preview, "sanity"), false);
+  assert.equal(Object.hasOwn(preview, "initialSan"), false);
   assert.equal(preview.sanMaximum, 99);
   assert.equal(preview.mov, 8);
   assert.equal(preview.build, 0);
@@ -79,8 +80,12 @@ test("skill bases follow the audited specialties", () => {
   assert.deepEqual(expectedSkillBase({ name: "图书馆使用" }), { known: true, base: 20 });
   assert.deepEqual(expectedSkillBase({ name: "信用评级" }), { known: true, base: 0 });
   assert.deepEqual(expectedSkillBase({ name: "克苏鲁神话" }), { known: true, base: 0 });
-  assert.deepEqual(expectedSkillBase({ name: "人类学" }), { known: false });
-  assert.deepEqual(expectedSkillBase({ name: "格斗①", specialty: "矛" }), { known: false });
+  assert.deepEqual(expectedSkillBase({ name: "人类学" }), { known: true, base: 1 });
+  assert.deepEqual(expectedSkillBase({ name: "估价" }), { known: true, base: 5 });
+  assert.deepEqual(expectedSkillBase({ name: "考古学" }), { known: true, base: 1 });
+  assert.deepEqual(expectedSkillBase({ name: "格斗①", specialty: "矛" }), { known: true, base: 20 });
+  assert.deepEqual(expectedSkillBase({ name: "格斗", specialty: "斗殴" }), { known: true, base: 25 });
+  assert.deepEqual(expectedSkillBase({ name: "射击", specialty: "手枪" }), { known: true, base: 20 });
   for (const [specialty, base] of Object.entries(FIGHTING_SPECIALTY_BASES)) {
     assert.deepEqual(expectedSkillBase({ name: "格斗", specialty }), { known: true, base }, specialty);
   }
@@ -88,7 +93,6 @@ test("skill bases follow the audited specialties", () => {
     assert.deepEqual(expectedSkillBase({ name: "射击", specialty }), { known: true, base }, specialty);
   }
   assert.deepEqual(expectedSkillBase({ name: "格斗", specialty: "拳" }), { known: false });
-  assert.deepEqual(expectedSkillBase({ name: "射击", specialty: "手枪" }), { known: false });
 
   const card = minimalCharacter();
   card.characteristics.dex = 70;
@@ -106,6 +110,7 @@ test("Cthulhu Mythos points and age notes do not rewrite characteristics", () =>
   card.skills[1].interestPoints = 0;
   card.skills[1].growth = 10;
   assert.equal(Object.hasOwn(derivePreview(card), "sanity"), false);
+  assert.equal(Object.hasOwn(derivePreview(card), "initialSan"), false);
   assert.equal(derivePreview(card).sanMaximum, 89);
 
   card.identity.age = 15;
@@ -133,6 +138,19 @@ test("armor changes only MOV, and point buy is a sum against the entered total",
   const over = pointBuyUsage(characteristics, { total: 100, includeLuck: false });
   assert.equal(over.ok, true);
   assert.equal(over.remaining < 0, true);
+  const edges = { str: 0, con: 90, siz: 0, dex: 0, app: 0, int: 0, pow: 0, edu: 0, luck: 90 };
+  const atCap = pointBuyUsage(edges, { total: 200, includeLuck: false });
+  assert.equal(atCap.ok, true);
+  assert.equal(atCap.used, 90);
+  const negative = { ...characteristics, str: -1 };
+  assert.match(pointBuyUsage(negative, { total: 1000, includeLuck: false }).message, /0 到 90/);
+  const tooHigh = { ...characteristics, edu: 91 };
+  assert.match(pointBuyUsage(tooHigh, { total: 1000, includeLuck: false }).message, /0 到 90/);
+  const highLuck = { ...characteristics, luck: 91 };
+  assert.match(pointBuyUsage(highLuck, { total: 1000, includeLuck: false }).message, /0 到 90/);
+  assert.match(pointBuyUsage(highLuck, { total: 1000, includeLuck: true }).message, /0 到 90/);
+  const blankLuck = { ...characteristics, luck: null };
+  assert.equal(pointBuyUsage(blankLuck, { total: 1000, includeLuck: false }).ok, true);
   assert.equal(pointBuyUsage(characteristics, { total: 0, includeLuck: false }).ok, false);
   assert.equal(pointBuyUsage(characteristics, { total: 500, includeLuck: "true" }).ok, false);
   assert.match(pointBuyUsage(characteristics, { total: "500", includeLuck: true }).message, /正整数/);
@@ -172,7 +190,8 @@ test("characteristic rolls use the confirmed dice, including luck", () => {
   assert.equal(flat[0].derived.movNote, "未计年龄和护甲");
   assert.equal(flat[0].derived.build, -2);
   assert.equal(flat[0].derived.damageBonus, "-2");
-  assert.equal(flat[0].derived.sanity, 15);
+  assert.equal(flat[0].derived.initialSan, 15);
+  assert.equal(Object.hasOwn(flat[0].derived, "sanity"), false);
   assert.equal(Object.hasOwn(flat[0].derived, "sanMaximum"), false);
 
   const pictured = describeCharacteristicSet({
@@ -189,7 +208,8 @@ test("characteristic rolls use the confirmed dice, including luck", () => {
   assert.equal(pictured.total, 515);
   assert.equal(pictured.totalWithLuck, 555);
   assert.equal(pictured.derived.hp, 13);
-  assert.equal(pictured.derived.sanity, 75);
+  assert.equal(pictured.derived.initialSan, 75);
+  assert.equal(Object.hasOwn(pictured.derived, "sanity"), false);
   assert.equal(pictured.derived.mp, 15);
   assert.equal(pictured.derived.mov, 8);
   assert.equal(pictured.derived.build, 0);

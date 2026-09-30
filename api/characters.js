@@ -101,6 +101,8 @@ function readSkills(skills) {
   return skills.map(readSkill);
 }
 
+const WEAPON_TEXT_FIELDS = ["range", "impale", "rate", "ammo", "malfunction", "era", "price", "invented", "note"];
+
 function readWeapon(weapon, index, errors) {
   if (!weapon || typeof weapon !== "object" || Array.isArray(weapon)) return weapon;
   const out = {
@@ -109,6 +111,11 @@ function readWeapon(weapon, index, errors) {
     skill: typeof weapon.skill === "string" ? weapon.skill : "",
     damage: typeof weapon.damage === "string" ? weapon.damage : "",
   };
+  for (const key of WEAPON_TEXT_FIELDS) {
+    if (!Object.hasOwn(weapon, key) || weapon[key] === "") continue;
+    if (typeof weapon[key] !== "string") errors.push({ path: `weapons[${index}].${key}`, message: "武器资料必须是文字" });
+    else out[key] = weapon[key];
+  }
   if (Object.hasOwn(weapon, "quantity")) {
     const quantity = weapon.quantity;
     if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 0) {
@@ -190,19 +197,7 @@ function assembleCard(body, { id, ownerId, existing }) {
     possessions: sectionValue(source, "possessions", existing, { items: [] }, (value) => readPossessions(value, errors)),
     spells: sectionValue(source, "spells", existing, [], readNamedList),
   };
-  if (Object.hasOwn(source, "sanity")) {
-    if (source.sanity !== null && source.sanity !== "") {
-      if (typeof source.sanity !== "number" || !Number.isInteger(source.sanity)) {
-        errors.push({ path: "sanity", message: "理智必须是整数" });
-      } else if (source.sanity > 99) {
-        errors.push({ path: "sanity", message: "理智不能超过 99" });
-      } else {
-        card.sanity = source.sanity;
-      }
-    }
-  } else if (existing && Object.hasOwn(existing, "sanity")) {
-    card.sanity = existing.sanity;
-  }
+  applyInitialSan(card, source, existing, errors);
   if (Object.hasOwn(source, "pointBuy")) {
     const message = pointBuyError(card.characteristics, source.pointBuy);
     if (message) errors.push({ path: "pointBuy", message });
@@ -231,8 +226,32 @@ function presentWeapon(weapon) {
     skill: typeof weapon?.skill === "string" ? weapon.skill : "",
     damage: typeof weapon?.damage === "string" ? weapon.damage : "",
   };
+  for (const key of WEAPON_TEXT_FIELDS) {
+    if (typeof weapon?.[key] === "string" && weapon[key] !== "") out[key] = weapon[key];
+  }
   if (weapon && Object.hasOwn(weapon, "quantity")) out.quantity = weapon.quantity;
   return out;
+}
+
+function applyInitialSan(card, source, existing, errors) {
+  const hasNew = Object.hasOwn(source, "initialSan");
+  const hasOld = Object.hasOwn(source, "sanity");
+  if (!hasNew && !hasOld) {
+    if (existing && Object.hasOwn(existing, "initialSan")) card.initialSan = existing.initialSan;
+    else if (existing && typeof existing.sanity === "number") card.initialSan = existing.sanity;
+    return;
+  }
+  const value = hasNew ? source.initialSan : source.sanity;
+  if (value === null || value === "") return;
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    errors.push({ path: "initialSan", message: "初始理智必须是整数" });
+    return;
+  }
+  if (value < 0 || value > 99) {
+    errors.push({ path: "initialSan", message: "初始理智必须是 0 到 99 的整数" });
+    return;
+  }
+  card.initialSan = value;
 }
 
 function presentArmor(armor) {
@@ -266,7 +285,7 @@ function present(record) {
     possessions: presentPossessions(card.possessions),
     spells: Array.isArray(card.spells) ? card.spells.map((spell) => ({ name: spell?.name })) : [],
     derived: derivePreview(card),
-    ...(Object.hasOwn(card, "sanity") ? { sanity: card.sanity } : {}),
+    ...(Object.hasOwn(card, "initialSan") ? { initialSan: card.initialSan } : Object.hasOwn(card, "sanity") ? { initialSan: card.sanity } : {}),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

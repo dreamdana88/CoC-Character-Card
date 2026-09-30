@@ -1,5 +1,27 @@
 import { CHARACTERISTIC_FIELDS, OCCUPATION_POINT_FORMULAS } from "./characterSchema.js";
 import {
+  ART_BASE,
+  ART_SPECIALTIES,
+  DRIVE_BASE,
+  FIGHTING_SPECIALTY_BASES,
+  FIREARMS_SPECIALTY_BASES,
+  FIXED_SKILL_BASES,
+  LANGUAGE_BASE,
+  LORE_BASE,
+  SCIENCE_DEFAULT_BASE,
+  SCIENCE_SPECIALTY_BASES,
+  SKILL_NAMES,
+  SURVIVAL_BASE,
+} from "./data/skills.js";
+
+export {
+  ART_SPECIALTIES,
+  FIGHTING_SPECIALTY_BASES,
+  FIREARMS_SPECIALTY_BASES,
+  SCIENCE_SPECIALTY_BASES,
+  SKILL_NAMES,
+};
+import {
   ageBandNote,
   attributeMovAdjust,
   build,
@@ -38,43 +60,6 @@ export const FORMULA_LABELS = Object.freeze([
   ["EDU_X2_PLUS_MAX_POW_X2_DEX_X2", "教育×2 + 较高的（意志×2 或 敏捷×2）"],
   ["EDU_X2_PLUS_MAX_EDU_X2_APP_X2", "教育×2 + 较高的（教育×2 或 外貌×2）"],
   ["CUSTOM", "自定义职业（不能从属性算出职业点）"],
-]);
-
-const FIXED_BASES = Object.freeze({
-  会计: 5,
-  聆听: 20,
-  图书馆使用: 20,
-  攀爬: 20,
-  话术: 5,
-  信用评级: 0,
-  克苏鲁神话: 0,
-});
-
-export const FIGHTING_SPECIALTY_BASES = Object.freeze({
-  鞭子: 5,
-  电锯: 10,
-  斧: 15,
-  剑: 20,
-  绞具: 15,
-  链枷: 10,
-  矛: 20,
-});
-
-export const FIREARMS_SPECIALTY_BASES = Object.freeze({
-  "步枪/霰弹枪": 25,
-  冲锋枪: 15,
-  弓术: 15,
-  喷射器: 10,
-  机枪: 10,
-  重武器: 10,
-});
-
-export const SKILL_NAMES = Object.freeze([
-  "会计", "人类学", "估价", "考古学", "技艺", "取悦", "攀爬", "计算机使用", "信用评级", "克苏鲁神话",
-  "乔装", "闪避", "汽车驾驶", "电气维修", "电子学", "话术", "格斗", "射击", "急救", "历史", "恐吓", "跳跃",
-  "外语", "母语", "法律", "图书馆使用", "聆听", "锁匠", "机械维修", "医学", "博物学", "导航", "神秘学",
-  "操作重型机械", "说服", "驾驶", "精神分析", "心理学", "骑术", "科学", "妙手", "侦查", "潜行", "生存",
-  "游泳", "投掷", "追踪", "动物驯养", "潜水", "爆破", "读唇", "催眠", "炮术", "学识", "自定义技能",
 ]);
 
 const LUCK_ROLL_NOTE = "审计的生成提示没有写幸运的骰点公式";
@@ -124,7 +109,7 @@ export function describeCharacteristicSet(set) {
       hp,
       majorWound: majorWoundThreshold(hp),
       mp: magicPoints(stats.pow),
-      sanity: stats.pow,
+      initialSan: stats.pow,
       mov: movement({ str: stats.str, siz: stats.siz, dex: stats.dex, age: 0, armorMovPenalty: 0 }),
       movNote: ROLL_MOV_NOTE,
       build: buildValue,
@@ -155,8 +140,12 @@ export function rollCharacteristicSets(count, rng = Math.random) {
   return Array.from({ length: count }, () => rollCharacteristicSet(rng));
 }
 
+function canonicalSkillName(name) {
+  return name.trim().replace(/[：:]\s*$/u, "").replace(/\s*Ω\s*$/u, "").replace(/[①②③]$/u, "");
+}
+
 export function expectedSkillBase(skill, characteristics = {}) {
-  const name = typeof skill?.name === "string" ? skill.name.trim() : "";
+  const name = canonicalSkillName(typeof skill?.name === "string" ? skill.name : "");
   const specialty = typeof skill?.specialty === "string" ? skill.specialty.trim() : "";
   if (name === "闪避") {
     const dex = integerOrNull(characteristics.dex);
@@ -168,8 +157,11 @@ export function expectedSkillBase(skill, characteristics = {}) {
     if (edu === null) return { known: false };
     return { known: true, base: ownLanguageBase(edu) };
   }
-  if (name === "技艺") return { known: true, base: 5 };
-  if (name === "科学") return { known: true, base: specialty === "数学" ? 10 : 1 };
+  if (name === "技艺") return { known: true, base: ART_BASE };
+  if (name === "科学") {
+    if (Object.hasOwn(SCIENCE_SPECIALTY_BASES, specialty)) return { known: true, base: SCIENCE_SPECIALTY_BASES[specialty] };
+    return { known: true, base: SCIENCE_DEFAULT_BASE };
+  }
   if (name === "格斗") {
     if (!Object.hasOwn(FIGHTING_SPECIALTY_BASES, specialty)) return { known: false };
     return { known: true, base: FIGHTING_SPECIALTY_BASES[specialty] };
@@ -178,7 +170,11 @@ export function expectedSkillBase(skill, characteristics = {}) {
     if (!Object.hasOwn(FIREARMS_SPECIALTY_BASES, specialty)) return { known: false };
     return { known: true, base: FIREARMS_SPECIALTY_BASES[specialty] };
   }
-  if (Object.hasOwn(FIXED_BASES, name)) return { known: true, base: FIXED_BASES[name] };
+  if (name === "驾驶") return { known: true, base: DRIVE_BASE };
+  if (name === "外语") return { known: true, base: LANGUAGE_BASE };
+  if (name === "生存") return { known: true, base: SURVIVAL_BASE };
+  if (name === "学识") return { known: true, base: LORE_BASE };
+  if (Object.hasOwn(FIXED_SKILL_BASES, name)) return { known: true, base: FIXED_SKILL_BASES[name] };
   return { known: false };
 }
 
@@ -206,14 +202,19 @@ export function pointBuyUsage(characteristics, options = {}) {
   const keys = options.includeLuck
     ? CHARACTERISTIC_FIELDS
     : CHARACTERISTIC_FIELDS.filter((key) => key !== "luck");
-  let used = 0;
-  for (const key of keys) {
+  for (const key of CHARACTERISTIC_FIELDS) {
     const value = characteristics?.[key];
+    const counted = keys.includes(key);
+    if (!counted && (value === undefined || value === null || value === "")) continue;
     if (typeof value !== "number" || !Number.isInteger(value)) {
       return { ok: false, message: "购点时计入的属性必须是整数" };
     }
-    used += value;
+    if (value < 0 || value > 90) {
+      return { ok: false, message: "购点时每项属性必须是 0 到 90 的整数" };
+    }
   }
+  let used = 0;
+  for (const key of keys) used += characteristics[key];
   return {
     ok: true,
     total,

@@ -13,16 +13,26 @@ test("a legal character passes", () => {
   assert.equal(result.errors, undefined);
 });
 
-test("hand-entered sanity can differ from POW and cannot exceed 99", () => {
+test("initialSan is an integer from 0 through 99 and can differ from POW", () => {
   const card = minimalCharacter();
-  card.sanity = 40;
+  card.initialSan = 40;
+  assert.equal(validateCharacter(card).ok, true);
+  assert.equal(card.characteristics.pow, 50);
+
+  card.initialSan = 0;
   assert.equal(validateCharacter(card).ok, true);
 
-  card.sanity = 99;
+  card.initialSan = 99;
   assert.equal(validateCharacter(card).ok, true);
 
-  card.sanity = 100;
-  assert.match(messages(validateCharacter(card)), /理智不能超过 99/);
+  card.initialSan = -1;
+  assert.match(messages(validateCharacter(card)), /初始理智必须是 0 到 99 的整数/);
+
+  card.initialSan = 100;
+  assert.match(messages(validateCharacter(card)), /初始理智必须是 0 到 99 的整数/);
+
+  card.initialSan = 40.5;
+  assert.match(messages(validateCharacter(card)), /初始理智必须是整数/);
 });
 
 test("playerName is display text and does not replace the owner id", () => {

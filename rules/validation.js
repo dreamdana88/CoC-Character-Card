@@ -113,9 +113,9 @@ export function validateCharacter(card) {
     else if (!ERAS.includes(identity.era)) fail("identity.era", "时代必须是 1920s、现代或其他");
   }
 
-  if (Object.hasOwn(card, "sanity")) {
-    if (typeof card.sanity !== "number" || !Number.isInteger(card.sanity)) fail("sanity", "理智必须是整数");
-    else if (card.sanity > 99) fail("sanity", "理智不能超过 99");
+  if (Object.hasOwn(card, "initialSan")) {
+    if (typeof card.initialSan !== "number" || !Number.isInteger(card.initialSan)) fail("initialSan", "初始理智必须是整数");
+    else if (card.initialSan < 0 || card.initialSan > 99) fail("initialSan", "初始理智必须是 0 到 99 的整数");
   }
 
   const characteristics = requireObject(card.characteristics, "characteristics", fail);
@@ -157,7 +157,14 @@ export function validateCharacter(card) {
   else {
     card.weapons.forEach((weapon, index) => {
       if (!isPlainObject(weapon)) fail(`weapons[${index}]`, "武器必须是对象");
-      else requireString(weapon, `weapons[${index}]`, "name", fail, { allowEmpty: false });
+      else {
+        requireString(weapon, `weapons[${index}]`, "name", fail, { allowEmpty: false });
+        for (const key of ["type", "skill", "damage", "range", "impale", "rate", "ammo", "malfunction", "era", "price", "invented", "note"]) {
+          if (Object.hasOwn(weapon, key) && typeof weapon[key] !== "string") {
+            fail(`weapons[${index}].${key}`, "武器资料必须是文字");
+          }
+        }
+      }
     });
   }
 

@@ -33,10 +33,30 @@ function filledRow(row, names) {
   return names.some((name) => fieldValue(row, name).trim() !== "");
 }
 
+const WEAPON_TEXT_FIELDS = ["type", "skill", "damage", "range", "impale", "rate", "ammo", "malfunction", "era", "price", "invented", "note"];
+const WEAPON_ROW_FIELDS = ["name", ...WEAPON_TEXT_FIELDS, "quantity"];
+
+function readCatalog(id) {
+  const node = document.getElementById(id);
+  if (!node) return [];
+  try {
+    const value = JSON.parse(node.textContent);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function canonicalSkillName(name) {
+  return name.trim().replace(/[：:]\s*$/u, "").replace(/\s*Ω\s*$/u, "").replace(/[①②③]$/u, "");
+}
+
 const form = document.querySelector("#card-form");
 if (form) {
   let pointBuy = null;
   let previewTimer = 0;
+  const occupations = readCatalog("occupation-catalog");
+  const weapons = readCatalog("weapon-catalog");
 
   function collect() {
     const data = {
@@ -61,13 +81,18 @@ if (form) {
         interestPoints: integerOrRaw(fieldValue(row, "interestPoints")),
       })),
       background: {},
-      weapons: [...form.querySelectorAll(".weapon-row")].filter((row) => filledRow(row, ["name", "type", "skill", "damage", "quantity"])).map((row) => {
+      weapons: [...form.querySelectorAll(".weapon-row")].filter((row) => filledRow(row, WEAPON_ROW_FIELDS)).map((row) => {
         const weapon = {
           name: fieldValue(row, "name"),
           type: fieldValue(row, "type"),
           skill: fieldValue(row, "skill"),
           damage: fieldValue(row, "damage"),
         };
+        for (const key of WEAPON_TEXT_FIELDS) {
+          if (key === "type" || key === "skill" || key === "damage") continue;
+          const value = fieldValue(row, key).trim();
+          if (value !== "") weapon[key] = value;
+        }
         const quantity = fieldValue(row, "quantity").trim();
         if (quantity !== "") weapon.quantity = integerOrRaw(quantity);
         return weapon;
@@ -99,15 +124,18 @@ if (form) {
     }
     const cash = form.querySelector("#cash");
     if (cash && cash.value.trim() !== "") data.possessions.cash = integerOrRaw(cash.value);
-    const sanity = form.querySelector("#sanity");
-    if (sanity) data.sanity = sanity.value.trim() === "" ? null : integerOrRaw(sanity.value.trim());
+    const initialSan = form.querySelector("#initialSan");
+    if (initialSan) data.initialSan = initialSan.value.trim() === "" ? null : integerOrRaw(initialSan.value.trim());
     if (pointBuy) data.pointBuy = { total: pointBuy.total, includeLuck: pointBuy.includeLuck };
     return data;
   }
 
   function specialtyList(name) {
-    if (name.trim() === "格斗") return "fighting-specialties";
-    if (name.trim() === "射击") return "firearms-specialties";
+    const canonical = canonicalSkillName(name);
+    if (canonical === "格斗") return "fighting-specialties";
+    if (canonical === "射击") return "firearms-specialties";
+    if (canonical === "技艺") return "art-specialties";
+    if (canonical === "科学") return "science-specialties";
     return "";
   }
 
@@ -294,29 +322,91 @@ if (form) {
     schedulePreview();
   });
 
-  document.querySelector("#add-occupational-skill")?.addEventListener("click", () => {
+  function occupationalSkillRow(name) {
     const row = document.createElement("div");
     row.className = "occupational-row";
     const input = document.createElement("input");
     input.dataset.occupationalSkill = "true";
     input.setAttribute("list", "skill-names");
+    input.value = name;
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.removeRow = "true";
     button.textContent = "删除";
     row.append(input, button);
-    document.querySelector("#occupational-skills")?.append(row);
+    return row;
+  }
+
+  function setOccupationalSkills(names) {
+    const box = document.querySelector("#occupational-skills");
+    if (!box) return;
+    box.replaceChildren();
+    for (const name of names) box.append(occupationalSkillRow(name));
+  }
+
+  document.querySelector("#occupation-choice")?.addEventListener("change", () => {
+    const id = document.querySelector("#occupation-choice").value;
+    const found = occupations.find((item) => item.id === id);
+    const text = document.querySelector("#occupation-skill-text");
+    if (!found) {
+      if (text) text.textContent = "";
+      return;
+    }
+    form.querySelector("[data-occupation='id']").value = found.id;
+    form.querySelector("[data-occupation='name']").value = found.name;
+    form.querySelector("[data-occupation='pointFormula']").value = found.pointFormula;
+    form.querySelector("[data-occupation='creditMin']").value = found.creditMin == null ? "" : String(found.creditMin);
+    form.querySelector("[data-occupation='creditMax']").value = found.creditMax == null ? "" : String(found.creditMax);
+    setOccupationalSkills(Array.isArray(found.occupationalSkills) ? found.occupationalSkills : []);
+    if (text) text.textContent = found.skillText || "";
     schedulePreview();
   });
 
+  document.querySelector("#add-occupational-skill")?.addEventListener("click", () => {
+    document.querySelector("#occupational-skills")?.append(occupationalSkillRow(""));
+    schedulePreview();
+  });
+
+  function weaponRowFields(weapon = {}) {
+    return WEAPON_ROW_FIELDS.map((name) => ({
+      name,
+      integer: name === "quantity",
+      value: weapon[name] == null ? "" : String(weapon[name]),
+    }));
+  }
+
+  function fillWeaponChoices() {
+    const category = document.querySelector("#weapon-category")?.value ?? "";
+    const select = document.querySelector("#weapon-choice");
+    if (!select) return;
+    const previous = select.value;
+    select.replaceChildren();
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "请选择";
+    select.append(blank);
+    weapons.forEach((weapon, index) => {
+      if (category && weapon.type !== category) return;
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = weapon.name;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+  }
+
+  document.querySelector("#weapon-category")?.addEventListener("change", fillWeaponChoices);
+
+  document.querySelector("#add-catalog-weapon")?.addEventListener("click", () => {
+    const raw = document.querySelector("#weapon-choice")?.value ?? "";
+    if (!/^\d+$/.test(raw)) return;
+    const weapon = weapons[Number(raw)];
+    if (!weapon) return;
+    appendRow(document.querySelector("#weapon-rows"), "weapon-row", weaponRowFields(weapon), "removeRow");
+  });
+
   document.querySelector("#add-weapon")?.addEventListener("click", () => {
-    appendRow(document.querySelector("#weapon-rows"), "weapon-row", [
-      { name: "name" },
-      { name: "type" },
-      { name: "skill" },
-      { name: "damage" },
-      { name: "quantity", integer: true },
-    ], "removeRow");
+    appendRow(document.querySelector("#weapon-rows"), "weapon-row", weaponRowFields(), "removeRow");
   });
 
   document.querySelector("#add-item")?.addEventListener("click", () => {
@@ -390,7 +480,7 @@ if (form) {
         statLine(keys.slice(4)),
         luckLine,
         `总值：${set.total}    总值含运：${withLuck}`,
-        `生命值：${textOrDash(derived.hp)}  理智：${textOrDash(derived.sanity)}  魔力：${textOrDash(derived.mp)}  移动：${textOrDash(derived.mov)}（${derived.movNote || ""}）`,
+        `生命值：${textOrDash(derived.hp)}  理智：${textOrDash(derived.initialSan)}  魔力：${textOrDash(derived.mp)}  移动：${textOrDash(derived.mov)}（${derived.movNote || ""}）`,
         `体格：${textOrDash(derived.build)}  伤害加值：${textOrDash(derived.damageBonus)}  重伤线：${textOrDash(derived.majorWound)}`,
       ].join("\n");
       const use = document.createElement("button");
@@ -405,9 +495,9 @@ if (form) {
           const luck = form.querySelector(`[data-section="characteristics"][name="luck"]`);
           if (luck) luck.value = String(set.luck);
         }
-        if (typeof set.derived?.sanity === "number") {
-          const sanity = form.querySelector("#sanity");
-          if (sanity) sanity.value = String(set.derived.sanity);
+        if (typeof set.derived?.initialSan === "number") {
+          const initialSan = form.querySelector("#initialSan");
+          if (initialSan) initialSan.value = String(set.derived.initialSan);
         }
         rollsDialog?.close();
         results.replaceChildren();

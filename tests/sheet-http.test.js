@@ -129,6 +129,8 @@ test("a full sheet can be saved, reread, copied, and deleted", async () => {
     assert.equal(body.derived.majorWound, 6);
     assert.equal(body.derived.mp, 10);
     assert.equal(Object.hasOwn(body.derived, "sanity"), false);
+    assert.equal(Object.hasOwn(body.derived, "initialSan"), false);
+    assert.equal(Object.hasOwn(body, "initialSan"), false);
     assert.equal(body.derived.sanMaximum, 99);
     assert.equal(body.derived.mov, 7);
     assert.equal(body.derived.build, 0);
@@ -180,7 +182,8 @@ test("a full sheet can be saved, reread, copied, and deleted", async () => {
     assert.match(page.body, /支配术/);
     assert.match(page.body, /1D6\+DB/);
     assert.match(page.body, /生命值：11/);
-    assert.match(page.body, /id="sanity"/);
+    assert.match(page.body, /id="initialSan"/);
+    assert.equal(page.body.includes('id="sanity"'), false);
     assert.equal(page.body.includes("理智：50"), false);
     assert.match(page.body, /职业点总额 320/);
     assert.match(page.body, /兴趣点总额 150/);
@@ -255,7 +258,8 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.equal(sets[0].derived.mov, 7);
     assert.equal(sets[0].derived.build, -2);
     assert.equal(sets[0].derived.damageBonus, "-2");
-    assert.equal(sets[0].derived.sanity, 15);
+    assert.equal(sets[0].derived.initialSan, 15);
+    assert.equal(Object.hasOwn(sets[0].derived, "sanity"), false);
     assert.equal(Object.hasOwn(sets[0].derived, "sanMaximum"), false);
     assert.equal(sets[1].str, 15);
     assert.equal(await countCards(db, cookie), 0);
@@ -291,6 +295,17 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(fresh.body, /图书馆使用/);
     assert.match(fresh.body, /闪避/);
     assert.match(fresh.body, /不能从属性算出职业点/);
+    assert.match(fresh.body, /id="occupation-choice"/);
+    assert.match(fresh.body, /id="initialSan"/);
+    assert.match(fresh.body, /0 到 99 的整数/);
+    assert.match(fresh.body, /0 到 90 的整数/);
+    assert.match(fresh.body, />会计师</);
+    assert.match(fresh.body, />自定义职业</);
+    assert.match(fresh.body, /id="weapon-choice"/);
+    assert.match(fresh.body, /加入所选武器/);
+    assert.match(fresh.body, />手里剑</);
+    assert.match(fresh.body, />黄铜指虎</);
+    assert.match(fresh.body, /人类学/);
     assert.equal(fresh.body.includes('id="point-buy-total" value='), false);
     assert.equal(fresh.body.includes('name="ownerDiscordUserId"'), false);
   });
@@ -336,8 +351,27 @@ test("illegal points, fields, point buy, and wrong bases are not stored", async 
     failures.push([spear, "基础值应为 20"]);
 
     const highSanity = fullBody();
-    highSanity.sanity = 100;
-    failures.push([highSanity, "理智不能超过 99"]);
+    highSanity.initialSan = 100;
+    failures.push([highSanity, "初始理智必须是 0 到 99 的整数"]);
+
+    const negativeSanity = fullBody();
+    negativeSanity.initialSan = -1;
+    failures.push([negativeSanity, "初始理智必须是 0 到 99 的整数"]);
+
+    const negativeStat = fullBody();
+    negativeStat.characteristics.str = -1;
+    negativeStat.pointBuy = { total: 1000, includeLuck: false };
+    failures.push([negativeStat, "购点时每项属性必须是 0 到 90 的整数"]);
+
+    const highStat = fullBody();
+    highStat.characteristics.edu = 91;
+    highStat.pointBuy = { total: 1000, includeLuck: false };
+    failures.push([highStat, "购点时每项属性必须是 0 到 90 的整数"]);
+
+    const highLuck = fullBody();
+    highLuck.characteristics.luck = 91;
+    highLuck.pointBuy = { total: 1000, includeLuck: false };
+    failures.push([highLuck, "购点时每项属性必须是 0 到 90 的整数"]);
 
     const overBudget = fullBody();
     overBudget.pointBuy = { total: 100, includeLuck: false };
@@ -364,7 +398,7 @@ test("illegal points, fields, point buy, and wrong bases are not stored", async 
     assert.equal(JSON.stringify(stored).includes("includeLuck"), false);
 
     const ownSanity = fullBody();
-    ownSanity.sanity = 40;
+    ownSanity.initialSan = 40;
     ownSanity.characteristics.pow = 50;
     ownSanity.pointBuy = { total: 12345, includeLuck: false };
     const keptSanity = await call(db, {
@@ -374,11 +408,25 @@ test("illegal points, fields, point buy, and wrong bases are not stored", async 
       body: ownSanity,
     });
     assert.equal(keptSanity.statusCode, 200);
-    assert.equal(json(keptSanity).sanity, 40);
+    assert.equal(json(keptSanity).initialSan, 40);
+    assert.equal(Object.hasOwn(json(keptSanity), "sanity"), false);
     assert.equal(json(keptSanity).characteristics.pow, 50);
-    assert.equal(getCharacter(db, json(saved).id).character.sanity, 40);
+    assert.equal(getCharacter(db, json(saved).id).character.initialSan, 40);
+    assert.equal(Object.hasOwn(getCharacter(db, json(saved).id).character, "sanity"), false);
 
-    ownSanity.sanity = 100;
+    const keptBody = { ...ownSanity, identity: { ...ownSanity.identity, name: "仍保留初始理智" } };
+    delete keptBody.initialSan;
+    const untouched = await call(db, {
+      method: "PATCH",
+      url: `/api/characters/${json(saved).id}`,
+      cookie,
+      body: keptBody,
+    });
+    assert.equal(untouched.statusCode, 200, untouched.body);
+    assert.equal(getCharacter(db, json(saved).id).character.initialSan, 40);
+    assert.equal(getCharacter(db, json(saved).id).character.identity.name, "仍保留初始理智");
+
+    ownSanity.initialSan = 100;
     const capped = await call(db, {
       method: "PATCH",
       url: `/api/characters/${json(saved).id}`,
@@ -386,8 +434,8 @@ test("illegal points, fields, point buy, and wrong bases are not stored", async 
       body: ownSanity,
     });
     assert.equal(capped.statusCode, 400);
-    assert.match(JSON.stringify(json(capped).errors), /理智不能超过 99/);
-    assert.equal(getCharacter(db, json(saved).id).character.sanity, 40);
+    assert.match(JSON.stringify(json(capped).errors), /初始理智必须是 0 到 99 的整数/);
+    assert.equal(getCharacter(db, json(saved).id).character.initialSan, 40);
 
     const manual = fullBody();
     manual.characteristics.str = 99;
@@ -399,7 +447,7 @@ test("illegal points, fields, point buy, and wrong bases are not stored", async 
     });
     assert.equal(raised.statusCode, 200);
     assert.equal(getCharacter(db, json(saved).id).character.characteristics.str, 99);
-    assert.equal(getCharacter(db, json(saved).id).character.sanity, 40);
+    assert.equal(getCharacter(db, json(saved).id).character.initialSan, 40);
 
     manual.pointBuy = { total: 100, includeLuck: true };
     const blocked = await call(db, {
@@ -455,6 +503,77 @@ test("CUSTOM can be saved without a guessed total, and age text does not change 
     assert.equal(fight.statusCode, 201);
     const fightCard = getCharacter(db, json(fight).id).character;
     assert.equal(fightCard.skills.find((skill) => skill.specialty === "拳").base, 40);
+  });
+});
+
+test("initialSan stays on the card, and catalog weapon fields round-trip", async () => {
+  await withDb(async (db) => {
+    const cookie = sessionFor(db);
+    const zero = fullBody();
+    zero.initialSan = 0;
+    const savedZero = await call(db, { method: "POST", url: "/api/characters", cookie, body: zero });
+    assert.equal(savedZero.statusCode, 201);
+    assert.equal(json(savedZero).initialSan, 0);
+
+    const top = fullBody();
+    top.initialSan = 99;
+    const savedTop = await call(db, { method: "POST", url: "/api/characters", cookie, body: top });
+    assert.equal(savedTop.statusCode, 201);
+    assert.equal(json(savedTop).initialSan, 99);
+    assert.equal(json(savedTop).characteristics.pow, 50);
+
+    const legacy = fullBody();
+    legacy.sanity = 40;
+    const savedLegacy = await call(db, { method: "POST", url: "/api/characters", cookie, body: legacy });
+    assert.equal(savedLegacy.statusCode, 201);
+    assert.equal(json(savedLegacy).initialSan, 40);
+    assert.equal(Object.hasOwn(json(savedLegacy), "sanity"), false);
+    const legacyStored = getCharacter(db, json(savedLegacy).id).character;
+    assert.equal(legacyStored.initialSan, 40);
+    assert.equal(Object.hasOwn(legacyStored, "sanity"), false);
+
+    const armed = fullBody();
+    armed.initialSan = 40;
+    armed.weapons = [{
+      name: "手里剑",
+      type: "常规武器",
+      skill: "投掷",
+      damage: "1D3+半DB",
+      range: "STR/5码",
+      impale: "√",
+      rate: "2",
+      ammo: "一次性",
+      malfunction: "100",
+      era: "1920s,现代",
+      price: "0.5/3",
+      invented: "——",
+    }];
+    const savedWeapon = await call(db, { method: "POST", url: "/api/characters", cookie, body: armed });
+    assert.equal(savedWeapon.statusCode, 201);
+    const weapon = getCharacter(db, json(savedWeapon).id).character.weapons[0];
+    assert.equal(weapon.range, "STR/5码");
+    assert.equal(weapon.impale, "√");
+    assert.equal(weapon.rate, "2");
+    assert.equal(weapon.price, "0.5/3");
+    assert.equal(Object.hasOwn(weapon, "note"), false);
+    assert.equal(JSON.stringify(weapon).includes("excel"), false);
+    const weaponPage = await call(db, { url: `/investigators/${json(savedWeapon).id}/edit`, cookie });
+    assert.match(weaponPage.body, /STR\/5码/);
+    assert.match(weaponPage.body, /id="initialSan"[^>]*value="40"/);
+
+    const custom = fullBody();
+    custom.occupation = {
+      id: "1",
+      name: "自定义职业",
+      pointFormula: "CUSTOM",
+      creditMin: 9,
+      creditMax: 30,
+      occupationalSkills: ["聆听"],
+    };
+    const savedCustom = await call(db, { method: "POST", url: "/api/characters", cookie, body: custom });
+    assert.equal(savedCustom.statusCode, 201);
+    assert.equal(json(savedCustom).occupation.pointFormula, "CUSTOM");
+    assert.equal(json(savedCustom).derived.occupationPoints.total, null);
   });
 });
 

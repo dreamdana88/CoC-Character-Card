@@ -7,10 +7,14 @@ import { AuthError, authStatus } from "../auth/errors.js";
 import { readCookie } from "../auth/http.js";
 import { readSession } from "../auth/store.js";
 import { BACKGROUND_FIELDS, CHARACTERISTIC_FIELDS, ERAS } from "../rules/characterSchema.js";
+import { OCCUPATIONS } from "../rules/data/occupations.js";
+import { WEAPON_CATEGORIES, WEAPONS } from "../rules/data/weapons.js";
 import {
+  ART_SPECIALTIES,
   FIGHTING_SPECIALTY_BASES,
   FIREARMS_SPECIALTY_BASES,
   FORMULA_LABELS,
+  SCIENCE_SPECIALTY_BASES,
   SKILL_NAMES,
   derivePreview,
   starterSkills,
@@ -212,6 +216,38 @@ function optionList(id, values) {
   return `<datalist id="${id}">${options}</datalist>`;
 }
 
+function catalogScript(id, value) {
+  const json = JSON.stringify(value).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
+  return `<script type="application/json" id="${id}">${json}</script>`;
+}
+
+function occupationOptions(selectedId) {
+  const options = [`<option value="">请选择</option>`];
+  for (const item of OCCUPATIONS) {
+    const selected = item.id === selectedId ? " selected" : "";
+    options.push(`<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}</option>`);
+  }
+  return options.join("");
+}
+
+function catalogSkillText(id) {
+  return OCCUPATIONS.find((item) => item.id === id)?.skillText ?? "";
+}
+
+function weaponOptions() {
+  const options = [`<option value="">请选择</option>`];
+  WEAPONS.forEach((weapon, index) => {
+    options.push(`<option value="${index}">${escapeHtml(weapon.name)}</option>`);
+  });
+  return options.join("");
+}
+
+function initialSanValue(card) {
+  if (card && Object.hasOwn(card, "initialSan")) return card.initialSan;
+  if (card && typeof card.sanity === "number") return card.sanity;
+  return "";
+}
+
 function show(value) {
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
@@ -273,13 +309,16 @@ function skillRow(skill, view) {
 </tr>`;
 }
 
+function weaponCell(weapon, key, integer = false) {
+  const integerAttr = integer ? ` data-integer="true"` : "";
+  return `<td><input data-field="${key}"${integerAttr} value="${escapeHtml(weapon?.[key] ?? "")}"></td>`;
+}
+
 function weaponRow(weapon) {
+  const textKeys = ["name", "type", "skill", "damage", "range", "impale", "rate", "ammo", "malfunction", "era", "price", "invented", "note"];
   return `<tr class="weapon-row">
-<td><input data-field="name" value="${escapeHtml(weapon?.name ?? "")}"></td>
-<td><input data-field="type" value="${escapeHtml(weapon?.type ?? "")}"></td>
-<td><input data-field="skill" value="${escapeHtml(weapon?.skill ?? "")}"></td>
-<td><input data-field="damage" value="${escapeHtml(weapon?.damage ?? "")}"></td>
-<td><input data-field="quantity" data-integer="true" value="${escapeHtml(weapon?.quantity ?? "")}"></td>
+${textKeys.map((key) => weaponCell(weapon, key)).join("")}
+${weaponCell(weapon, "quantity", true)}
 <td><button type="button" data-remove-row>删除</button></td>
 </tr>`;
 }
@@ -355,14 +394,15 @@ ${identityHtml}
 <p id="point-buy-status"></p>
 <button type="button" id="end-point-buy" hidden>结束购点</button>
 <div class="characteristics">${statsHtml}</div>
-<label>理智<input id="sanity" data-integer="true" inputmode="numeric" value="${escapeHtml(card?.sanity ?? "")}"></label>
-<p>天命选定方案时，理智等于该方案的意志。手填和购点自行填写，不超过 99。</p>
+<label>初始理智<input id="initialSan" data-integer="true" inputmode="numeric" value="${escapeHtml(initialSanValue(card))}"></label>
+<p>天命选定方案时，初始理智等于该方案的意志。手填和购点自行填写，必须是 0 到 99 的整数。</p>
 <p>天命按 3D6×5 掷幸运，并计入总值含运。幸运也可以手改。</p>
 <pre id="derived">${escapeHtml(derivedText(preview))}</pre>
 </section>
 <section id="panel-skills" data-panel="skills" role="tabpanel" aria-labelledby="tab-skills" hidden>
 <h2>职业</h2>
-<p>命名职业的完整本职表没有逐条进入审计。请选择已确认的点数公式，并填写信用范围和本职技能。自定义职业不能从属性算出职业点。</p>
+<label>选择职业<select id="occupation-choice">${occupationOptions(occupation.id)}</select></label>
+<p id="occupation-skill-text">${escapeHtml(catalogSkillText(occupation.id))}</p>
 <label>职业编号<input data-occupation="id" value="${escapeHtml(occupation.id ?? "")}"></label>
 <label>职业名<input data-occupation="name" value="${escapeHtml(occupation.name ?? "")}"></label>
 <label>职业点公式<select data-occupation="pointFormula">${formulaOptions(occupation.pointFormula)}</select></label>
@@ -372,6 +412,7 @@ ${identityHtml}
 <button type="button" id="add-occupational-skill">增加本职技能</button>
 <pre id="occupation-summary">${escapeHtml(summary)}</pre>
 <h2>技能</h2>
+<p>固定基础值按技能名自动填入。闪避、母语，以及格斗、射击的专攻会随属性或专攻更新。</p>
 <pre id="point-pools">${escapeHtml(pointPoolText(preview))}</pre>
 <div class="table-wrap">
 <table>
@@ -386,14 +427,16 @@ ${backgroundHtml}
 </section>
 <section id="panel-gear" data-panel="gear" role="tabpanel" aria-labelledby="tab-gear" hidden>
 <h2>武器</h2>
-<p>伤害里的 DB、半DB 按文字填写。</p>
+<p>从武器表选择后，属性抄到这一行。伤害里的 DB、半DB 按原表文字保留。成功率用角色自己的技能，不写在武器上。</p>
+<label>武器类型<select id="weapon-category"><option value="">全部</option>${WEAPON_CATEGORIES.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}</select></label>
+<label>武器<select id="weapon-choice">${weaponOptions()}</select></label>
+<div class="actions"><button type="button" id="add-catalog-weapon">加入所选武器</button> <button type="button" id="add-weapon">增加武器</button></div>
 <div class="table-wrap">
 <table>
-<thead><tr><th>名称</th><th>类型</th><th>技能</th><th>伤害</th><th>数量</th><th></th></tr></thead>
+<thead><tr><th>名称</th><th>类型</th><th>技能</th><th>伤害</th><th>射程</th><th>贯穿</th><th>每轮</th><th>装弹</th><th>故障</th><th>时代</th><th>价格</th><th>发明时间</th><th>注释</th><th>数量</th><th></th></tr></thead>
 <tbody id="weapon-rows">${weapons.map((weapon) => weaponRow(weapon)).join("")}</tbody>
 </table>
 </div>
-<button type="button" id="add-weapon">增加武器</button>
 <h2>护甲</h2>
 <label><input type="checkbox" id="armor-enabled"${armorChecked}> 穿着护甲</label>
 <div id="armor-fields"${armorHidden}>
@@ -418,6 +461,10 @@ ${backgroundHtml}
 ${optionList("skill-names", SKILL_NAMES)}
 ${optionList("fighting-specialties", Object.keys(FIGHTING_SPECIALTY_BASES))}
 ${optionList("firearms-specialties", Object.keys(FIREARMS_SPECIALTY_BASES))}
+${optionList("art-specialties", ART_SPECIALTIES)}
+${optionList("science-specialties", Object.keys(SCIENCE_SPECIALTY_BASES))}
+${catalogScript("occupation-catalog", OCCUPATIONS)}
+${catalogScript("weapon-catalog", WEAPONS)}
 <p id="errors" class="errors"></p>
 <div class="actions"><button type="submit">保存</button></div>
 </form>
@@ -428,6 +475,7 @@ ${optionList("firearms-specialties", Object.keys(FIREARMS_SPECIALTY_BASES))}
 <div id="roll-results"></div>
 </dialog>
 <dialog id="point-buy-dialog">
+<p>购点时每项属性是 0 到 90 的整数，幸运不计入总额时也一样。</p>
 <label>购点总额<input id="point-buy-total" inputmode="numeric"></label>
 <label><input type="checkbox" id="point-buy-luck"> 包含幸运</label>
 <p id="point-buy-error" class="errors"></p>
