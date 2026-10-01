@@ -28,11 +28,11 @@ rules/      纯函数。测试不连 Discord，不引用 TeaParty-Bell 源码
 tests/
 ```
 
-一次只做当前 Phase：`B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8`。B0、B1、B2、B3、B4、B5、B6 已完成。用户没点名下一个阶段，就停在当前阶段。每个阶段带测试，通过后再进下一个。
+一次只做当前 Phase：`B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8`。B0、B1、B2、B3、B4、B5、B6、B7 已完成。下一阶段为 B8，未经用户授权不得进入。用户没点名下一个阶段，就停在当前阶段。每个阶段带测试，通过后再进下一个。
 
 B6 只做本站 `*.coc7.json` 的导出和导入。`TL COC CARD.xlsx` 导入和 Excel 导出已取消。
 
-B7 内部 API 是唯一集成边界，只监听本机或校验 `INTERNAL_API_SECRET`。B8 第一批只做 PL 选择自己的长期卡；本局消耗留在 A 线。
+B7 内部只读 API 是唯一集成边界，同时保持本机监听与 Bearer `INTERNAL_API_SECRET` 校验，不使用网页 Session。B8 第一批只做 PL 选择自己的长期卡；本局消耗留在 A 线。
 
 ## 依据
 

@@ -45,7 +45,7 @@ test("Phase B0 skeleton stays runnable", () => {
   assert.deepEqual(readdirSync(join(root, "web")).sort(), [
     "asset-review.css", "asset-review.html", "assets", "card-actions.js", "editor-state.js", "editor.js", "gear-ui.js", "gear.css", "gear.js", "html.js", "investigator-list-client.js", "investigator-list.css", "investigator-list.js", "login.css", "login.js", "pages.js", "site.css", "skill-ui.js", "skills.css", "static-assets.js",
   ]);
-  assert.deepEqual(readdirSync(join(root, "api")).sort(), ["characters.js"]);
+  assert.deepEqual(readdirSync(join(root, "api")).sort(), ["characters.js", "internal.js"]);
   assert.equal(statSync(join(root, "server.js")).isFile(), true);
   assert.deepEqual(readdirSync(join(root, "storage")).sort(), [
     "backup.js",
@@ -116,8 +116,8 @@ test("Phase B0 skeleton stays runnable", () => {
     assert.equal(file.includes("../TeaParty-Bell"), false);
     assert.equal(file.includes("../TL COC CARD.xlsx"), false);
   }
-  assert.match(readme, /Phase B6/);
+  assert.match(readme, /Phase B7/);
   assert.match(readme, /better-sqlite3/);
   assert.equal(readme.includes("本阶段不安装数据库驱动"), false);
-  assert.match(agents, /B0、B1、B2、B3、B4、B5、B6 已完成/);
+  assert.match(agents, /B0、B1、B2、B3、B4、B5、B6、B7 已完成/);
 });

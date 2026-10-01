@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleCharacterApi } from "./api/characters.js";
+import { handleInternalApi } from "./api/internal.js";
 import { handleAuthRequest } from "./auth/http.js";
 import { openDatabase } from "./storage/index.js";
 import { handlePage } from "./web/pages.js";
@@ -14,6 +15,10 @@ export async function handleRequest(request, response, context) {
   const url = new URL(request.url || "/", "http://127.0.0.1");
   const log = context.log ?? console.error;
   try {
+    if (url.pathname === "/internal" || url.pathname.startsWith("/internal/")) {
+      handleInternalApi(request, response, context);
+      return;
+    }
     if (url.pathname === "/auth" || url.pathname.startsWith("/auth/")) {
       await handleAuthRequest(request, response, context);
       return;
