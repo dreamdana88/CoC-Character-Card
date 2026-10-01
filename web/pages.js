@@ -171,7 +171,7 @@ ${editorSource}</script>
 
 function identityControl(key, label, integer, identity) {
   const value = identity && Object.hasOwn(identity, key) ? identity[key] : "";
-  if (key === "sex") return `<label>${escapeHtml(label)}<select name="sex" data-section="identity"><option value="">请选择</option>${["男", "女"].map(sex => `<option value="${sex}"${value === sex ? " selected" : ""}>${sex}</option>`).join("")}</select></label>`;
+  if (key === "sex") return `<label>${escapeHtml(label)}<select name="sex" data-section="identity"><option value="">请选择</option>${["男", "女", "其它"].map(sex => `<option value="${sex}"${value === sex ? " selected" : ""}>${sex}</option>`).join("")}</select></label>`;
   if (key === "era") {
     const options = [`<option value="">请选择</option>`].concat(ERAS.map((era) => {
       const selected = identity?.era === era ? " selected" : "";
