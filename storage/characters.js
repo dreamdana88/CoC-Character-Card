@@ -2,6 +2,21 @@ import { randomUUID } from "node:crypto";
 import { validateCharacter } from "../rules/validation.js";
 import { StorageError } from "./errors.js";
 
+// 空 ID 是该用户尚未保存的新卡；保存成功后与正式卡 ID 绑定。
+export function fixedCharacteristicRolls(db, ownerId, characterId, generate) {
+  return db.transaction(() => {
+    const row = db.prepare("SELECT sets_json FROM characteristic_rolls WHERE owner_discord_user_id = ? AND character_id = ?").get(ownerId, characterId);
+    if (row) return { sets: JSON.parse(row.sets_json), reused: true };
+    const sets = generate();
+    db.prepare("INSERT INTO characteristic_rolls VALUES (?, ?, ?)").run(ownerId, characterId, JSON.stringify(sets));
+    return { sets, reused: false };
+  })();
+}
+
+export function bindDraftRolls(db, ownerId, characterId) {
+  db.prepare("UPDATE characteristic_rolls SET character_id = ? WHERE owner_discord_user_id = ? AND character_id = ''").run(characterId, ownerId);
+}
+
 function withoutPlayerName(card) {
   if (!card?.identity || typeof card.identity !== "object" || Array.isArray(card.identity) || !Object.hasOwn(card.identity, "playerName")) {
     return card;

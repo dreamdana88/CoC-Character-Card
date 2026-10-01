@@ -25,6 +25,7 @@ import {
   updateCharacter,
 } from "../storage/index.js";
 import { StorageError } from "../storage/errors.js";
+import { bindDraftRolls, fixedCharacteristicRolls } from "../storage/characters.js";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const SESSION_FAILURES = new Set([
@@ -561,8 +562,19 @@ export async function handleCharacterApi(request, response, context) {
         return;
       }
       try {
-        const sets = rollCharacteristicSets(payload.value.count, context.rng ?? Math.random);
-        sendJson(response, 200, { sets });
+        const characterId = payload.value.characterId ?? "";
+        if (!Number.isInteger(payload.value.count) || payload.value.count < 1 || payload.value.count > 20) {
+          sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: "生成数量必须是 1 到 20 的整数" });
+          return;
+        }
+        if (typeof characterId !== "string") {
+          sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: "角色卡编号无效" });
+          return;
+        }
+        if (characterId && !ownedOrReject(response, getCharacter(context.db, characterId), user.userDiscordId)) return;
+        const result = fixedCharacteristicRolls(context.db, user.userDiscordId, characterId,
+          () => rollCharacteristicSets(payload.value.count, context.rng ?? Math.random));
+        sendJson(response, 200, result);
       } catch (error) {
         if (error instanceof RuleError) {
           sendJson(response, 400, { ok: false, error: "BAD_REQUEST", message: error.message });
@@ -624,7 +636,12 @@ export async function handleCharacterApi(request, response, context) {
         validationResponse(response, errors);
         return;
       }
-      sendJson(response, 201, present(createCharacter(context.db, assembled.card, { now: context.now })));
+      const record = context.db.transaction(() => {
+        const created = createCharacter(context.db, assembled.card, { now: context.now });
+        bindDraftRolls(context.db, user.userDiscordId, created.character.id);
+        return created;
+      })();
+      sendJson(response, 201, present(record));
       return;
     }
 

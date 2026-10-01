@@ -716,7 +716,6 @@ if (form) {
   const rollsDialog = document.querySelector("#rolls-dialog");
   document.querySelector("#open-rolls")?.addEventListener("click", () => {
     document.querySelector("#roll-error").textContent = "";
-    document.querySelector("#roll-results").replaceChildren();
     rollsDialog?.showModal();
   });
   document.querySelector("#close-rolls")?.addEventListener("click", () => rollsDialog?.close());
@@ -728,14 +727,16 @@ if (form) {
     const response = await fetch("/api/characteristics/rolls", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ count }),
+      body: JSON.stringify({ count, characterId: form.dataset.method === "PATCH" ? decodeURIComponent(form.dataset.url.split("/").at(-1)) : "" }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       error.textContent = body.message || "骰点失败";
       return;
     }
-    error.textContent = "";
+    error.textContent = body.reused ? "本卡天命已固定，以下是首次生成的候选。可任选其一，或改用手填、购点。" : "天命已固定保存，本卡不能重新生成。";
+    document.querySelector("#roll-count").value = String(body.sets.length);
+    document.querySelector("#roll-count").readOnly = true;
     const results = document.querySelector("#roll-results");
     results.replaceChildren();
     const keys = [
@@ -784,7 +785,6 @@ if (form) {
           if (initialSan) initialSan.value = String(set.derived.initialSan);
         }
         rollsDialog?.close();
-        results.replaceChildren();
         refreshPreview().catch(showPreviewError);
       });
       box.append(title, text, use);

@@ -54,3 +54,8 @@ B8 初始化来源：姓名为 `character.identity.name`，HP 为 `derived.hp`�
 状态码：200 成功、400 参数无效、401 认证失败、404 卡或路由不存在、405 非 GET（`Allow: GET`）、500 内部错误。先认证再检查方法。错误统一 `{ok:false,error,message}`；代码分别为 `INVALID_PARAMETER`、`UNAUTHORIZED`、`NOT_FOUND`、`METHOD_NOT_ALLOWED`、`INTERNAL_ERROR`。所有响应使用 JSON UTF-8 和 `Cache-Control: no-store`，错误与日志不包含密钥。
 
 内部接口没有写入操作或本局状态；SQLite 只有档案馆服务打开。TeaParty-Bell 尚未接入；B8、VPS HTTP 调用与 OpenResty 公网隔离均未验收。
+# 天命固定候选
+
+每张卡只生成一次天命候选，首次数量固定；后续取回相同结果，刷新、重新登录不重掷。
+新卡未保存时，同一用户共用一份待保存候选；保存成功后绑定正式卡，新建下一张卡可获得自己的候选。
+仍允许从候选任选、手填或购点。候选存在独立表，不进入 B7 内部 API 的长期角色卡响应。

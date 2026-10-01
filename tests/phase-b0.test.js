@@ -55,7 +55,7 @@ test("Phase B0 skeleton stays runnable", () => {
     "index.js",
     "migrations",
   ]);
-  assert.deepEqual(readdirSync(join(root, "storage", "migrations")).sort(), ["001_init.sql", "002_auth.sql"]);
+  assert.deepEqual(readdirSync(join(root, "storage", "migrations")).sort(), ["001_init.sql", "002_auth.sql", "003_character_rolls.sql"]);
   assert.deepEqual(readdirSync(join(root, "auth")).sort(), [
     "config.js",
     "constants.js",

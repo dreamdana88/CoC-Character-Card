@@ -8,9 +8,24 @@ import { createWebSession } from "../auth/store.js";
 import { handleRequest } from "../server.js";
 import { getCharacter, openDatabase } from "../storage/index.js";
 import { minimalCharacter, setCredit } from "./minimalCharacter.js";
+import { fixedCharacteristicRolls } from "../storage/characters.js";
 
 const NOW = new Date("2026-05-01T00:00:00.000Z");
 const USER_A = "80351110224678912";
+
+test("fixed天命按用户与卡隔离，重开数据库后保持不变", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "coc-fixed-rolls-"));
+  const path = join(dir, "cards.sqlite");
+  let db = openDatabase({ DATABASE_PATH: path });
+  try {
+    assert.deepEqual(fixedCharacteristicRolls(db, USER_A, "card1", () => [1, 2]).sets, [1, 2]);
+    assert.deepEqual(fixedCharacteristicRolls(db, "other", "card1", () => [3]).sets, [3]);
+    assert.deepEqual(fixedCharacteristicRolls(db, USER_A, "card2", () => [4]).sets, [4]);
+    db.close();
+    db = openDatabase({ DATABASE_PATH: path });
+    assert.deepEqual(fixedCharacteristicRolls(db, USER_A, "card1", () => { throw new Error("reroll"); }), { sets: [1, 2], reused: true });
+  } finally { db.close(); removeTemp(dir); }
+});
 const env = {
   DISCORD_CLIENT_ID: "157730590492196864",
   DISCORD_CLIENT_SECRET: "client-secret-value",
@@ -266,6 +281,20 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.equal(sets[1].str, 15);
     assert.equal(await countCards(db, cookie), 0);
 
+    const again = await call(db, { method: "POST", url: "/api/characteristics/rolls", cookie,
+      body: { count: 5 }, rng() { throw new Error("must not reroll"); } });
+    assert.equal(again.statusCode, 200);
+    assert.equal(json(again).reused, true);
+    assert.deepEqual(json(again).sets, sets);
+    const saved = await call(db, { method: "POST", url: "/api/characters", cookie, body: fullBody() });
+    assert.equal(saved.statusCode, 201);
+    const savedId = json(saved).id;
+    const bound = await call(db, { method: "POST", url: "/api/characteristics/rolls", cookie,
+      body: { count: 1, characterId: savedId }, rng() { throw new Error("must not reroll saved card"); } });
+    assert.deepEqual(json(bound).sets, sets);
+    // Restore the original assertion's empty-card setup; fixed candidates remain stored.
+    await call(db, { method: "DELETE", url: "/api/characters/" + savedId, cookie });
+
     const rejected = await call(db, {
       method: "POST",
       url: "/api/characteristics/rolls",
@@ -286,7 +315,7 @@ test("preview, rolls, and the new-character page do not write a card", async () 
     assert.match(fresh.body, /天命/);
     assert.match(fresh.body, /购点/);
     assert.match(fresh.body, /生成数量 X/);
-    assert.match(fresh.body, /开始骰点/);
+    assert.match(fresh.body, /生成 \/ 取回固定天命/);
     assert.match(fresh.body, /购点总额/);
     assert.match(fresh.body, /包含幸运/);
     assert.match(fresh.body, /使用此方案/);

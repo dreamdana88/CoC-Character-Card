@@ -390,10 +390,10 @@ ${catalogScript("occupation-catalog", OCCUPATIONS)}
 ${catalogScript("weapon-catalog", WEAPONS)}
 <p id="errors" class="errors" role="alert" tabindex="-1"></p>
 </form>
-<dialog id="rolls-dialog" aria-labelledby="rolls-title"><div class="dialog-title"><span>命运档案袋</span><h2 id="rolls-title">选择你的天命</h2></div><p>几份可能的命运，等待你的选择。</p>
+<dialog id="rolls-dialog" aria-labelledby="rolls-title"><div class="dialog-title"><span>命运档案袋</span><h2 id="rolls-title">选择你的天命</h2></div><p>每张卡只能生成一次。首次数量与候选会固定保存，刷新也不会重掷；可从候选中选择，或改用手填、购点。</p>
 <label>生成数量 X<input id="roll-count" inputmode="numeric"></label>
 <p id="roll-error" class="errors"></p>
-<div class="actions"><button type="button" id="start-rolls">开始骰点</button> <button type="button" id="close-rolls">关闭</button></div>
+<div class="actions"><button type="button" id="start-rolls">生成 / 取回固定天命</button> <button type="button" id="close-rolls">关闭</button></div>
 <div id="roll-results"></div>
 </dialog>
 <dialog id="occupation-picker" aria-labelledby="occupation-picker-title"><div class="dialog-title"><span>职业目录 · PROFESSION INDEX</span><h2 id="occupation-picker-title">选择职业</h2></div><div class="occupation-search-bar"><label>搜索职业或技能<input id="occupation-search" type="search" placeholder="例如：侦探、科学家……" autocomplete="off"></label><button type="button" id="occupation-picker-close">关闭</button></div><p id="occupation-result-count" role="status"></p><ul id="occupation-results">${occupationChoices()}</ul><p id="occupation-empty" hidden>没有匹配的职业，请换个关键词，或选“自定义职业”。</p></dialog>

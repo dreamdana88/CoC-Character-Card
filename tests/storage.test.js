@@ -73,7 +73,7 @@ test("migrations apply once and survive reopen", () => {
     assert.equal(existsSync(databasePath(dir)), false);
     const created = openTemp(dir);
     assert.equal(existsSync(databasePath(dir)), true);
-    assert.deepEqual(versions(created), [1, 2]);
+    assert.deepEqual(versions(created), [1, 2, 3]);
     assert.deepEqual(
       created.prepare("PRAGMA table_info(characters)").all().map((column) => column.name),
       ["id", "owner_discord_user_id", "schema_version", "ruleset", "character_json", "created_at", "updated_at"],
@@ -88,8 +88,8 @@ test("migrations apply once and survive reopen", () => {
     created.close();
 
     const reopened = openTemp(dir);
-    assert.deepEqual(versions(reopened), [1, 2]);
-    assert.equal(reopened.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get().n, 2);
+    assert.deepEqual(versions(reopened), [1, 2, 3]);
+    assert.equal(reopened.prepare("SELECT COUNT(*) AS n FROM schema_migrations").get().n, 3);
     assert.equal(getCharacter(reopened, card.id).character.identity.name, "奈洛莉");
     reopened.close();
   } finally {
